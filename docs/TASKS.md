@@ -27,11 +27,9 @@ This is the ordered checklist for shipping Continuity from design to live mainne
   - `npm install @openzeppelin/contracts` (v5.6.1)
   - Verify imports work: `import "@openzeppelin/contracts/token/ERC20/IERC20.sol";`
 
-- [ ] **1.4** Set up Node.js frontend environment
-  - `npm init -y` in `frontend/` folder
-  - Install ethers.js: `npm install ethers`
-  - Install React: `npm install react react-dom`
-  - Install build tooling: `npm install -D vite @vitejs/plugin-react`
+- [x] **1.4** Set up Node.js frontend environment
+  - `frontend/package.json` created
+  - Installed ethers.js, React, and Vite + `@vitejs/plugin-react` for build tooling
 
 - [x] **1.5** Create `.env.example`
   - Document required env vars: ARC_RPC_URL, ARC_CHAIN_ID, ARC_USDC_ADDRESS, PRIVATE_KEY
@@ -157,76 +155,70 @@ This is the ordered checklist for shipping Continuity from design to live mainne
 
 ### Wallet & Context Setup
 
-- [ ] **4.1** Set up ethers.js provider & signer
-  - Create `frontend/src/Web3Context.jsx` (or similar)
-  - Detect MetaMask availability
-  - Expose provider, signer, userAddress, balance
+- [x] **4.1** Set up ethers.js provider & signer
+  - Created `frontend/src/Web3Context.jsx`
+  - Detects wallet availability (`window.ethereum`)
+  - Exposes provider, signer, address, chainId, wrongChain, usdcBalance
 
-- [ ] **4.2** Create WalletConnect component
-  - Button: "Connect MetaMask"
+- [x] **4.2** Create WalletConnect component
+  - Button: "Connect Wallet"
   - On click: request account access via `eth_requestAccounts`
-  - Display connected address (truncated)
-  - Display USDC balance
+  - Display connected address (truncated) and USDC balance
+  - Also shows a "wrong network" state if `chainId !== 1329`
 
 ### Create Vault Flow
 
-- [ ] **4.3** Build CreateVault.jsx component
-  - Form fields: beneficiary address, check-in interval (radio or dropdown), grace period, amount
-  - On submit:
-    - Approve USDC transfer (if not already approved)
-    - Call factory.createVault()
-    - Wait for tx confirmation
-    - Display success message with new vault address
+- [x] **4.3** Build CreateVault.jsx component
+  - Form fields: beneficiary address (with a required confirm-address field),
+    check-in interval (30/90/180 day dropdown), grace period, amount
+  - On submit: `factory.createVault()` first (clone addresses aren't
+    predictable client-side) → approve *that* vault → `vault.deposit()`
+  - Display success message with new vault address
 
-- [ ] **4.4** Test create-vault flow on mainnet
-  - Connect wallet
-  - Fill form
-  - Submit and verify vault is created
-  - Verify initial USDC deposit is held in vault
+- [x] **4.4** Test create-vault flow
+  - Driven through the real UI (Playwright + an injected EIP-1193 provider
+    backed by a real `ethers.Wallet`) against a local chain pinned to chain
+    ID 1329, with the actual deployed `VaultFactory`/`Vault`/`MockUSDC`
+    contracts — not mainnet (still blocked on the Phase 3 USDC-address
+    question), but exercising the identical code path.
+  - Verified on-chain afterward: vault created, correct beneficiary/interval, 50 USDC balance.
 
 ### Owner Dashboard
 
-- [ ] **4.5** Build OwnerDashboard.jsx component
-  - Fetch user's vault address from factory
-  - Display vault state (ACTIVE, CLAIMABLE, CLAIMED, CANCELLED)
-  - Display balance, beneficiary, check-in interval
-  - Display countdown: "X days until deadline" (or "Deadline passed")
-  - Check In button: calls `vault.checkIn()`
-  - Withdraw button: prompts for amount, calls `vault.withdraw(amount)`
-  - Cancel button: calls `vault.cancel()`
+- [x] **4.5** Build OwnerDashboard.jsx component
+  - Fetches the caller's vault from the factory
+  - Displays state (Active/Claimable/Claimed/Cancelled), balance, beneficiary, interval, countdown
+  - Check In / Withdraw / Cancel buttons, each gated by the contract's actual state requirements
 
-- [ ] **4.6** Test owner dashboard
-  - Create vault via create-vault flow
-  - Verify dashboard displays correct info
-  - Click "Check In", verify deadline resets in UI
-  - Wait (or mock time), verify state changes to CLAIMABLE
+- [x] **4.6** Test owner dashboard
+  - Same Playwright-driven flow: created a vault, confirmed dashboard fields
+    matched, clicked "Check In Now", verified the on-screen deadline reset
+    (29d 23h → 30d 0h) and the "Check-in successful" message.
 
 ### Beneficiary Claim Flow
 
-- [ ] **4.7** Build BeneficiaryClaim.jsx component
-  - Query all vaults from factory
-  - Filter vaults where user's address == beneficiary AND state == CLAIMABLE
-  - Display list of claimable vaults
-  - Claim button: calls `vault.claim()` on the selected vault
-  - Show confirmation after claim
+- [x] **4.7** Build BeneficiaryClaim.jsx component
+  - Queries `factory.getAllVaults()`, filters client-side for
+    `beneficiary == connected address && state == Claimable`
+  - Claim button calls `vault.claim()`, shows a confirmation message
 
-- [ ] **4.8** Test beneficiary claim flow
-  - Create vault with known beneficiary address
-  - Simulate deadline passing (use anvil `--block-time 1` or similar)
-  - Switch to beneficiary wallet
-  - Verify vault appears in "Claimable" list
-  - Click "Claim", verify USDC is transferred to beneficiary
+- [x] **4.8** Test beneficiary claim flow
+  - Fast-forwarded the local chain 31 days past the deadline via
+    `evm_increaseTime` + `evm_mine`, switched to the beneficiary wallet,
+    confirmed the vault appeared in the claimable list, clicked "Claim",
+    and verified the beneficiary's USDC balance increased by the deposited amount.
 
 ### UI Polish & Integration
 
-- [ ] **4.9** Add loading states & error handling
-  - Show spinner during tx confirmation
-  - Display error messages from contract reverts
-  - Toast notifications for success/failure
+- [x] **4.9** Add loading states & error handling
+  - Buttons show busy state and disable while a tx is in flight
+  - Contract revert reasons surface as inline status text (no toast library — kept dependency-free for MVP)
 
-- [ ] **4.10** Integrate into single App.jsx
-  - Router to switch between pages (Connect → Create → Dashboard/Claim)
-  - Navigation header
+- [x] **4.10** Integrate into single App.jsx
+  - Simple tab-based nav (Dashboard / Create Vault / Claim) instead of a
+    router — same user-facing flow as the design doc, one dependency fewer
+  - Header shows wallet connection state; a dev-only faucet panel (mint
+    test USDC) renders above the tabs, compiled out of `npm run build` entirely
 
 ---
 

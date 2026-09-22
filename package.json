@@ -5,7 +5,10 @@
   "description": "Non-custodial USDC dead-man's-switch vault on Arc mainnet",
   "scripts": {
     "build": "hardhat compile",
-    "test": "hardhat test"
+    "test": "hardhat test",
+    "node": "hardhat node",
+    "deploy:local": "hardhat run script/deploy-local.js --network localhost",
+    "deploy:arc": "hardhat run script/deploy.js --network arc"
   },
   "license": "MIT",
   "devDependencies": {

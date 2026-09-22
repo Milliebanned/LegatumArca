@@ -78,6 +78,38 @@ itself pinned to chain ID 1329 in `hardhat.config.js`), and `VaultFactory`'s
 constructor independently reverts if the live chain ID isn't 1329. Record the
 printed `VaultFactory` address and update this README and the frontend config.
 
+## Local Development (Frontend + Contracts)
+
+To run the full stack against a local test chain instead of Arc mainnet —
+useful for developing and testing the frontend without real funds:
+
+```bash
+# Terminal 1: local chain, pinned to chain ID 1329 (see hardhat.config.js)
+npx hardhat node
+
+# Terminal 2: deploy MockUSDC + VaultFactory to it, mint test USDC,
+# and write the addresses into frontend/src/deployedLocal.js
+npx hardhat run script/deploy-local.js --network localhost
+
+# Terminal 3: frontend dev server
+cd frontend
+npm install
+npm run dev
+```
+
+Open http://localhost:5173, connect a wallet pointed at `http://127.0.0.1:8545`
+(chain ID 1329 — e.g. add it to MetaMask as a custom network), and a
+"Mint 1,000 test USDC" button appears on every screen (dev builds only —
+`npm run build` never includes it). The frontend's hardcoded `chainId: 1329`
+check passes against this local chain exactly as it will against real Arc
+mainnet, since no separate dev/prod branching exists in the chain-ID check
+itself — only which contract addresses get compiled in
+(`frontend/src/config.js`).
+
+`script/deploy-local.js` is local-testing-only and is never used for the Arc
+mainnet deployment — that's `script/deploy.js`, which refuses to run against
+anything but the `arc` network.
+
 ## Live Deployment
 
 - **Network:** Arc mainnet
