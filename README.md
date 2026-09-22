@@ -1,0 +1,137 @@
+# Continuity
+
+A non-custodial USDC vault on Arc mainnet that releases funds to a named beneficiary automatically if the owner stops checking in.
+
+## Why This Matters
+
+Cryptocurrency enables self-custody — you hold your own keys, no bank or intermediary required. But self-custody has a hard problem that traditional finance solved decades ago: what happens to your money if you die, lose access, or disappear? With a bank account, heirs can recover funds. With self-custodied crypto, if you're gone, the money is gone forever. There's no inheritance mechanism, no succession process, nothing.
+
+Continuity solves this: deposit USDC into a vault, name a beneficiary, and set a check-in interval. As long as you keep checking in, you retain full control. If you stop checking in for long enough, the vault automatically becomes claimable by your beneficiary — no custodian, no middleman, just contract-enforced logic.
+
+## How It Works
+
+1. **Create a vault** — Connect your wallet, deposit USDC, name a beneficiary address, pick a check-in interval (30/90/180 days) and grace period.
+2. **Check in periodically** — Call `checkIn()` to reset the countdown and prove you're still active. This is the only ongoing action required; everything else is optional.
+3. **Beneficiary claim (if you're inactive)** — If the deadline passes with no check-in, the beneficiary can call `claim()` to withdraw the funds.
+4. **Safety net** — If you check in after the deadline but before the beneficiary claims, you regain full control immediately. There's always a way back.
+5. **Withdraw or cancel anytime** — While active, you can withdraw funds or cancel the vault entirely. It's not a lockup.
+
+## Tech Stack
+
+- **Smart contracts:** Solidity (OpenZeppelin for ERC20/Clones/ReentrancyGuard) — **Arc mainnet only**
+- **Deployment:** Arc mainnet exclusively; gas paid in USDC (no portability to other chains)
+- **Frontend:** Minimal React + ethers.js; hardcoded for Arc mainnet (chain ID 1329)
+- **Testing:** Hardhat + Mocha/Chai (unit tests run against a local node configured with Arc's chain ID)
+
+## Arc Mainnet Requirements
+
+**This project is built exclusively for Arc mainnet. It will not work on any other blockchain.**
+
+- Contracts are hardcoded to Arc mainnet (chain ID 1329)
+- All gas is paid in USDC (Arc's native gas currency)
+- Frontend only connects to Arc's RPC endpoint
+- No chain selection, no fallback chains, no portability
+
+## Local Development
+
+### Prerequisites
+
+- Node.js 18+
+- A wallet with USDC on Arc mainnet (for testing and demo deployment)
+- Arc mainnet RPC access (public: https://rpc.arc.io)
+
+### Setup
+
+```bash
+git clone <repo>
+cd continuity
+
+# Install dependencies
+npm install
+
+# Compile contracts
+npm run build
+
+# Run tests
+npm test
+```
+
+### Environment
+
+Copy `.env.example` to `.env` and fill in the real values:
+
+```
+ARC_RPC_URL=https://rpc.arc.io
+ARC_CHAIN_ID=1329
+ARC_USDC_ADDRESS=0x... # Arc mainnet USDC token address (to be filled in)
+PRIVATE_KEY=<your_wallet_private_key>
+```
+
+### Deploy to Arc Mainnet
+
+```bash
+npx hardhat run script/deploy.js --network arc
+```
+
+The deploy script refuses to run on any network other than `arc` (which is
+itself pinned to chain ID 1329 in `hardhat.config.js`), and `VaultFactory`'s
+constructor independently reverts if the live chain ID isn't 1329. Record the
+printed `VaultFactory` address and update this README and the frontend config.
+
+## Live Deployment
+
+- **Network:** Arc mainnet
+- **VaultFactory Contract:** `[Contract address to be filled in after deployment]`
+- **USDC Token (Arc):** `[Token address to be filled in]`
+- **Frontend Demo:** `[URL to be filled in]`
+
+## Usage
+
+1. Open the frontend (URL above).
+2. Connect your wallet.
+3. Deposit USDC and set beneficiary/intervals.
+4. Check in periodically (as often as you'd like; there's no penalty for frequent check-ins).
+5. Beneficiary can claim after the deadline expires.
+
+## Project Structure
+
+```
+continuity/
+├── README.md
+├── memory.md
+├── hardhat.config.js
+├── src/
+│   ├── VaultFactory.sol
+│   ├── Vault.sol
+│   └── mocks/          # test-only doubles, never deployed
+├── test/
+│   ├── VaultFactory.test.js
+│   ├── Vault.test.js
+│   └── utils/time.js
+├── script/
+│   └── deploy.js
+├── frontend/
+│   ├── src/
+│   │   ├── App.jsx
+│   │   ├── CreateVault.jsx
+│   │   ├── OwnerDashboard.jsx
+│   │   └── BeneficiaryClaim.jsx
+│   └── package.json
+└── docs/
+    ├── PRD.md
+    ├── ARCHITECTURE.md
+    ├── DESIGN.md
+    └── TASKS.md
+```
+
+## Security
+
+- No privileged admin role or backdoor.
+- Reentrancy guards on all external calls.
+- Checks-effects-interactions pattern enforced throughout.
+- Ownership and access control via onchain logic only.
+- Contract fully auditable on-chain; no hidden state.
+
+## License
+
+MIT
