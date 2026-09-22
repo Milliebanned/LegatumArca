@@ -98,7 +98,7 @@ npm run dev
 ```
 
 Open http://localhost:5173, connect a wallet pointed at `http://127.0.0.1:8545`
-(chain ID 5042 — e.g. add it to MetaMask as a custom network), and a
+(chain ID 5042 — add it as a custom network in whichever wallet extension you connect with), and a
 "Mint 1,000 test USDC" button appears on every screen (dev builds only —
 `npm run build` never includes it). The frontend's hardcoded `chainId: 5042`
 check passes against this local chain exactly as it will against real Arc

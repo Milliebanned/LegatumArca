@@ -298,7 +298,7 @@ npx hardhat run script/deploy.js --network arc
 
 ### Components
 
-1. **WalletConnect** — MetaMask or similar; stores address and signer.
+1. **WalletConnect** — detects installed browser wallets via EIP-6963 (MetaMask, Rabby, Coinbase Wallet, Brave, OKX, etc.), lets the user pick one, and stores its address/signer. Falls back to `window.ethereum` for a wallet that hasn't adopted EIP-6963.
 2. **CreateVault** — Form to set beneficiary, interval, grace period; calls factory.createVault().
 3. **OwnerDashboard** — Shows vault status, countdown to deadline, check-in button, withdraw/cancel.
 4. **BeneficiaryClaim** — If user is a beneficiary of any vault, shows claimable vaults and claim button.

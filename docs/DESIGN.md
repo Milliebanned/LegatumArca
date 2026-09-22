@@ -410,7 +410,7 @@ function withdraw(uint256 amount) external onlyOwner onlyActive nonReentrant {
 ┌────────────────────────────┐
 │  Legatumarca - Arc Vault    │
 │                            │
-│  [ Connect MetaMask ]      │
+│  [ Connect Wallet ]  (lists installed wallets)      │
 │                            │
 └────────────────────────────┘
        (user clicks)

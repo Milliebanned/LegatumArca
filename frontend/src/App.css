@@ -116,6 +116,27 @@ button:disabled {
   margin-top: 8px;
 }
 
+.wallet-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.wallet-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: flex-start;
+  background: #10131a;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.wallet-option:hover {
+  border-color: var(--accent);
+}
+
 .withdraw-row {
   display: flex;
   gap: 10px;
