@@ -27,6 +27,18 @@ body {
   padding: 24px 16px 64px;
 }
 
+.testnet-banner {
+  background: #ffb84c;
+  color: #1a1200;
+  font-weight: 700;
+  font-size: 0.82rem;
+  text-align: center;
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  letter-spacing: 0.02em;
+}
+
 header {
   display: flex;
   align-items: center;

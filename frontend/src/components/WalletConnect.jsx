@@ -14,7 +14,7 @@ export default function WalletConnect() {
     return (
       <div className="card">
         <h2>Legatumarca</h2>
-        <p className="muted">A non-custodial USDC vault on Arc mainnet.</p>
+        <p className="muted">A non-custodial USDC vault on {ARC_CONFIG.label}.</p>
 
         {wallets.length > 0 ? (
           <div className="wallet-list">

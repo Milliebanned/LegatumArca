@@ -5,6 +5,7 @@ import CreateVault from "./components/CreateVault.jsx";
 import OwnerDashboard from "./components/OwnerDashboard.jsx";
 import BeneficiaryClaim from "./components/BeneficiaryClaim.jsx";
 import DevFaucet from "./components/DevFaucet.jsx";
+import { ARC_CONFIG, IS_TESTNET_BUILD } from "./config.js";
 import "./App.css";
 
 const TABS = ["Dashboard", "Create Vault", "Claim"];
@@ -15,6 +16,12 @@ function Shell() {
 
   return (
     <div className="app">
+      {IS_TESTNET_BUILD && (
+        <div className="testnet-banner">
+          TESTNET STAGING — pointed at Arc Testnet, not the mainnet submission. No real funds are involved.
+        </div>
+      )}
+
       <header>
         <h1>Legatumarca</h1>
         <WalletConnect />
@@ -44,7 +51,9 @@ function Shell() {
       )}
 
       <footer>
-        <p className="muted">Arc mainnet only. Non-custodial. No admin backdoor.</p>
+        <p className="muted">
+          {ARC_CONFIG.label} only. Non-custodial. No admin backdoor.
+        </p>
       </footer>
     </div>
   );
