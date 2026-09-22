@@ -1,8 +1,8 @@
-# Build Tasks: Continuity
+# Build Tasks: Legatumarca
 
 ## Overview
 
-This is the ordered checklist for shipping Continuity from design to live mainnet deployment and microgrant submission. Tasks are organized by phase and should be completed in sequence (with some parallelization noted).
+This is the ordered checklist for shipping Legatumarca from design to live mainnet deployment and microgrant submission. Tasks are organized by phase and should be completed in sequence (with some parallelization noted).
 
 > **Tooling note:** the project uses **Hardhat**, not Foundry — `package.json`
 > and `hardhat.config.js` were already set up that way before contract work
@@ -15,7 +15,7 @@ This is the ordered checklist for shipping Continuity from design to live mainne
 ## Phase 1: Project Setup & Scaffolding
 
 - [x] **1.1** Initialize git repository
-  - `git init` in `continuity/` folder
+  - `git init` in `legatumarca/` folder
   - Create `.gitignore` (Solidity: build/, node_modules/, .env; Node: dist/, .DS_Store)
   - Create initial commit with folder structure
 
@@ -316,7 +316,7 @@ This is the ordered checklist for shipping Continuity from design to live mainne
   - Go to https://dorahacks.io/hackathon/arc-microgrants/detail
   - Click "Submit BUIDL" or similar
   - Fill form with:
-    - Project name: "Continuity"
+    - Project name: "Legatumarca"
     - Description: (from 7.2)
     - Live deployment link: (Arc mainnet explorer link to VaultFactory)
     - Repository link: (GitHub URL)

@@ -1,4 +1,4 @@
-# Design: Continuity
+# Design: Legatumarca
 
 ## Arc Mainnet Only
 
@@ -408,7 +408,7 @@ function withdraw(uint256 amount) external onlyOwner onlyActive nonReentrant {
 
 ```
 ┌────────────────────────────┐
-│  Continuity - Arc Vault    │
+│  Legatumarca - Arc Vault    │
 │                            │
 │  [ Connect MetaMask ]      │
 │                            │

@@ -1,4 +1,4 @@
-# Continuity
+# Legatumarca
 
 A non-custodial USDC vault on Arc mainnet that releases funds to a named beneficiary automatically if the owner stops checking in.
 
@@ -6,7 +6,7 @@ A non-custodial USDC vault on Arc mainnet that releases funds to a named benefic
 
 Cryptocurrency enables self-custody — you hold your own keys, no bank or intermediary required. But self-custody has a hard problem that traditional finance solved decades ago: what happens to your money if you die, lose access, or disappear? With a bank account, heirs can recover funds. With self-custodied crypto, if you're gone, the money is gone forever. There's no inheritance mechanism, no succession process, nothing.
 
-Continuity solves this: deposit USDC into a vault, name a beneficiary, and set a check-in interval. As long as you keep checking in, you retain full control. If you stop checking in for long enough, the vault automatically becomes claimable by your beneficiary — no custodian, no middleman, just contract-enforced logic.
+Legatumarca solves this: deposit USDC into a vault, name a beneficiary, and set a check-in interval. As long as you keep checking in, you retain full control. If you stop checking in for long enough, the vault automatically becomes claimable by your beneficiary — no custodian, no middleman, just contract-enforced logic.
 
 ## How It Works
 
@@ -44,7 +44,7 @@ Continuity solves this: deposit USDC into a vault, name a beneficiary, and set a
 
 ```bash
 git clone <repo>
-cd continuity
+cd legatumarca
 
 # Install dependencies
 npm install
@@ -128,7 +128,7 @@ anything but the `arc` network.
 ## Project Structure
 
 ```
-continuity/
+legatumarca/
 ├── README.md
 ├── memory.md
 ├── hardhat.config.js

@@ -1,8 +1,8 @@
-# Architecture: Continuity
+# Architecture: Legatumarca
 
 ## Overview
 
-Continuity is a non-custodial USDC vault system on Arc mainnet. It consists of:
+Legatumarca is a non-custodial USDC vault system on Arc mainnet. It consists of:
 
 1. **Smart Contracts (Solidity)**
    - `VaultFactory.sol` — Factory contract that creates and tracks individual vaults.

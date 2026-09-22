@@ -16,7 +16,7 @@ function Shell() {
   return (
     <div className="app">
       <header>
-        <h1>Continuity</h1>
+        <h1>Legatumarca</h1>
         <WalletConnect />
       </header>
 

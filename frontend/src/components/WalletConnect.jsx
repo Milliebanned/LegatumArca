@@ -11,7 +11,7 @@ export default function WalletConnect() {
   if (!address) {
     return (
       <div className="card">
-        <h2>Continuity</h2>
+        <h2>Legatumarca</h2>
         <p className="muted">A non-custodial USDC vault on Arc mainnet.</p>
         <button onClick={connect}>Connect Wallet</button>
         {error && <p className="error">{error}</p>}
