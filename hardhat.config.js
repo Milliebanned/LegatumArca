@@ -21,5 +21,13 @@ module.exports = {
       chainId: 5042,
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : [],
     },
+    // Staging only — see script/deploy-testnet.js and memory.md Decision 8.
+    // The contracts themselves still hardcode a single CHAIN_ID; this
+    // network entry is just RPC plumbing, not a chain-abstraction feature.
+    arcTestnet: {
+      url: "https://rpc.testnet.arc.io",
+      chainId: 5042002,
+      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : [],
+    },
   },
 };
