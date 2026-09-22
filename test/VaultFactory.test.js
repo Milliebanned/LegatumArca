@@ -14,9 +14,9 @@ describe("VaultFactory", function () {
     return { factory, usdc, usdcHolder };
   }
 
-  it("deploys only on Arc mainnet (chainId 1329)", async function () {
+  it("deploys only on Arc mainnet (chainId 5042)", async function () {
     const network = await ethers.provider.getNetwork();
-    expect(network.chainId).to.equal(1329n);
+    expect(network.chainId).to.equal(5042n);
   });
 
   it("creates a vault clone and initializes it", async function () {

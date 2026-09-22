@@ -91,13 +91,13 @@ This is a real blocker for mainstream adoption. Non-technical users are rightly 
 
 This product is built **exclusively for Arc mainnet**. It is not a general-purpose contract that could work on any EVM chain.
 
-- **Chain ID:** Hardcoded to 1329 (Arc mainnet only; rejects other chains at contract level)
+- **Chain ID:** Hardcoded to 5042 (Arc mainnet only; rejects other chains at contract level)
 - **Gas currency:** USDC (Arc's native gas token). All transactions must be executable with minimal USDC on hand.
-- **RPC endpoint:** Hardcoded to https://rpc.arc.io (or Circle's official Arc RPC); no fallback RPCs.
-- **Token:** USDC on Arc mainnet (address to be confirmed from Circle, then hardcoded in Vault.sol).
+- **RPC endpoint:** Hardcoded to https://rpc.mainnet.arc.io (or Circle's official Arc RPC); no fallback RPCs.
+- **Token:** USDC on Arc mainnet, address `0x3600000000000000000000000000000000000000` (Circle's ERC-20 view over Arc's native USDC balance; verified against docs.arc.io — see memory.md Decision 7).
 - **Deployment target:** Arc mainnet only (no testnet, no other chains; live funds required for the grant).
 - **No chain abstraction:** No environment variables for chain ID, no chain-selection UI, no portability layer.
-- **Verification:** VaultFactory constructor verifies `chainid() == 1329` at deployment; deployment fails if not on Arc.
+- **Verification:** VaultFactory constructor verifies `chainid() == 5042` at deployment; deployment fails if not on Arc.
 
 ## DoraHacks Submission Checklist
 

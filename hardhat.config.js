@@ -10,15 +10,15 @@ module.exports = {
     sources: "./src",
   },
   networks: {
-    // Local network mirrors Arc mainnet's chain ID (1329) so the on-chain
+    // Local network mirrors Arc mainnet's chain ID (5042) so the on-chain
     // "Arc mainnet only" checks in VaultFactory/Vault behave the same in
     // tests as they will in production. No other network is configured.
     hardhat: {
-      chainId: 1329,
+      chainId: 5042,
     },
     arc: {
-      url: ARC_RPC_URL,
-      chainId: 1329,
+      url: ARC_RPC_URL || "https://rpc.mainnet.arc.io",
+      chainId: 5042,
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : [],
     },
   },

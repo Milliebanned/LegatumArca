@@ -213,17 +213,17 @@ function claim() external onlyBeneficiary nonReentrant {
 
 ```solidity
 // Constants in Vault.sol (hardcoded, not configurable)
-address public constant USDC = 0x...; // Arc mainnet USDC token (to be confirmed from Circle)
-uint256 public constant CHAIN_ID = 1329; // Arc mainnet chain ID
+address public constant USDC = 0x3600000000000000000000000000000000000000; // Arc mainnet USDC (verified, docs.arc.io)
+uint256 public constant CHAIN_ID = 5042; // Arc mainnet chain ID
 string public constant CHAIN_NAME = "Arc";
 ```
 
 ```javascript
 // Frontend constants (hardcoded, not configurable)
-const ARC_CHAIN_ID = 1329;
-const ARC_RPC_URL = "https://rpc.arc.io";
+const ARC_CHAIN_ID = 5042;
+const ARC_RPC_URL = "https://rpc.mainnet.arc.io";
 const VAULT_FACTORY_ADDRESS = "0x..."; // Deployed address after Phase 3
-const USDC_ADDRESS = "0x..."; // Arc mainnet USDC (to be confirmed)
+const USDC_ADDRESS = "0x3600000000000000000000000000000000000000"; // Arc mainnet USDC (verified, docs.arc.io)
 ```
 
 **No chain abstraction, no fallback chains, no environment selection.** The contract will revert if called from any other chain.
@@ -242,8 +242,8 @@ Arc's native gas currency is USDC, which means every operation is already stable
 ### Official Arc RPC Endpoint
 
 ```
-Primary RPC: https://rpc.arc.io
-Chain ID: 1329
+Primary RPC: https://rpc.mainnet.arc.io
+Chain ID: 5042
 Currency: USDC (not ETH)
 ```
 
@@ -308,10 +308,10 @@ npx hardhat run script/deploy.js --network arc
 ```javascript
 // Arc Mainnet Configuration (hardcoded, not configurable)
 const ARC_CONFIG = {
-  chainId: 1329,
-  rpcUrl: "https://rpc.arc.io",
+  chainId: 5042,
+  rpcUrl: "https://rpc.mainnet.arc.io",
   factoryAddress: "0x...", // Deployed address
-  usdcAddress: "0x...", // Circle USDC on Arc
+  usdcAddress: "0x3600000000000000000000000000000000000000", // Circle USDC on Arc (verified, docs.arc.io)
 };
 
 // Connect wallet and verify Arc mainnet
@@ -322,7 +322,7 @@ const connectWallet = async () => {
   // Verify connected chain is Arc mainnet
   const network = await provider.getNetwork();
   if (network.chainId !== BigInt(ARC_CONFIG.chainId)) {
-    throw new Error(`Please switch to Arc mainnet (chainId 1329). Currently on ${network.chainId}`);
+    throw new Error(`Please switch to Arc mainnet (chainId 5042). Currently on ${network.chainId}`);
   }
   
   setUserAddress(await signer.getAddress());
@@ -335,7 +335,7 @@ const createVault = async (beneficiary, interval, grace, amount) => {
   // Verify chain before proceeding
   const network = await provider.getNetwork();
   if (network.chainId !== BigInt(ARC_CONFIG.chainId)) {
-    throw new Error("Must be on Arc mainnet (chainId 1329)");
+    throw new Error("Must be on Arc mainnet (chainId 5042)");
   }
   
   const factory = new ethers.Contract(

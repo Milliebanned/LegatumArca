@@ -105,22 +105,17 @@ This is the ordered checklist for shipping Continuity from design to live mainne
 
 ## Phase 3: Deployment & Arc Mainnet Integration
 
-- [ ] **3.1** Confirm Arc Mainnet Configuration (CRITICAL)
-  - Verify Arc chain ID: **1329** (hardcoded constant)
-  - Confirm USDC token address on Arc mainnet from Circle docs
-  - Confirm Arc RPC endpoint: https://rpc.arc.io (or Circle's official RPC)
-  - Record official block explorer URL (for verification)
-  - **Hardcode all values in Vault.sol and frontend** — NO environment variables, NO fallbacks
-  - Example:
-    ```solidity
-    uint256 public constant CHAIN_ID = 1329; // Arc mainnet (hardcoded)
-    address public constant USDC = 0x...; // Arc USDC (hardcoded from Circle)
-    ```
+- [x] **3.1** Confirm Arc Mainnet Configuration (CRITICAL)
+  - Verified Arc chain ID: **5042** (hardcoded constant in `Vault.sol`/`VaultFactory.sol`; matches MetaMask's own "Arc" network entry)
+  - Confirmed USDC token address on Arc mainnet: `0x3600000000000000000000000000000000000000` (docs.arc.io — see memory.md Decision 7)
+  - Confirmed Arc RPC endpoint: https://rpc.mainnet.arc.io
+  - Block explorer: https://explorer.arc.io
+  - All values are hardcoded/immutable in `Vault.sol`, `VaultFactory.sol`, `hardhat.config.js`, and `frontend/src/config.js` — no environment-variable fallback in the contracts themselves (`.env` only feeds the deploy script, per Decision 5)
 
 - [x] **3.2** Create deployment script (Hardhat) for Arc Mainnet
   - File: `script/deploy.js`
   - Script deploys VaultFactory (which deploys the Vault implementation in its own constructor)
-  - VaultFactory constructor verifies chain ID == 1329 (will revert if wrong chain)
+  - VaultFactory constructor verifies chain ID == 5042 (will revert if wrong chain)
   - Script itself also refuses to run on any network but `arc`
   - Script requires `ARC_USDC_ADDRESS` to be set, logs deployed addresses to console
   - Remaining: run against real Arc RPC and confirm on Arc explorer (blocked on 3.1/3.4 open questions)
@@ -129,20 +124,20 @@ This is the ordered checklist for shipping Continuity from design to live mainne
   - `npx hardhat run script/deploy.js --network arc` against a forked Arc RPC
   - Verify no errors and output shows deployed address
 
-- [ ] **3.4** Gather Arc mainnet details
-  - Arc mainnet RPC URL (e.g., https://rpc.arc.io)
-  - Arc mainnet chain ID (e.g., 1329)
-  - USDC token address on Arc
-  - Update `.env.example` with these values
+- [x] **3.4** Gather Arc mainnet details
+  - Arc mainnet RPC URL: https://rpc.mainnet.arc.io
+  - Arc mainnet chain ID: 5042
+  - USDC token address on Arc: `0x3600000000000000000000000000000000000000`
+  - `.env.example` updated with these values
 
 - [ ] **3.5** Prepare mainnet deployment
   - Set `PRIVATE_KEY` in `.env` (wallet with USDC to fund test vault)
   - Verify wallet has sufficient USDC for deployment gas + demo vault funding (e.g., $50)
 
 - [ ] **3.6** Deploy to Arc mainnet
-  - `forge script script/Deploy.s.sol --rpc-url https://rpc.arc.io --private-key $PRIVATE_KEY --broadcast`
+  - `npx hardhat run script/deploy.js --network arc` (or `npm run deploy:arc`)
   - Record VaultFactory address and update README.md
-  - Verify deployment on Arc block explorer (if available)
+  - Verify deployment on https://explorer.arc.io
 
 - [ ] **3.7** Create demo vault on mainnet
   - Using frontend or cast, create a vault with real USDC
@@ -164,7 +159,7 @@ This is the ordered checklist for shipping Continuity from design to live mainne
   - Button: "Connect Wallet"
   - On click: request account access via `eth_requestAccounts`
   - Display connected address (truncated) and USDC balance
-  - Also shows a "wrong network" state if `chainId !== 1329`
+  - Also shows a "wrong network" state if `chainId !== 5042`
 
 ### Create Vault Flow
 
@@ -178,7 +173,7 @@ This is the ordered checklist for shipping Continuity from design to live mainne
 - [x] **4.4** Test create-vault flow
   - Driven through the real UI (Playwright + an injected EIP-1193 provider
     backed by a real `ethers.Wallet`) against a local chain pinned to chain
-    ID 1329, with the actual deployed `VaultFactory`/`Vault`/`MockUSDC`
+    ID 5042, with the actual deployed `VaultFactory`/`Vault`/`MockUSDC`
     contracts — not mainnet (still blocked on the Phase 3 USDC-address
     question), but exercising the identical code path.
   - Verified on-chain afterward: vault created, correct beneficiary/interval, 50 USDC balance.
@@ -252,7 +247,7 @@ This is the ordered checklist for shipping Continuity from design to live mainne
 - [ ] **5.4** Verify Arc Mainnet Integration (CRITICAL)
   - Test that VaultFactory constructor rejects deployment on wrong chain
   - Test that frontend throws error if MetaMask is on a non-Arc chain
-  - Verify all hardcoded constants match Arc mainnet (chain ID 1329, correct USDC address)
+  - Verify all hardcoded constants match Arc mainnet (chain ID 5042, correct USDC address)
   - Confirm deployment script only accepts Arc mainnet RPC
   - Verify no fallback chains, no env var chain config, no chain-selection UI
 

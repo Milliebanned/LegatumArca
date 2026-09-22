@@ -2,7 +2,7 @@
 
 ## Arc Mainnet Only
 
-**All code in this section is hardcoded for Arc mainnet (chain ID 1329). There is no chain abstraction, no multi-chain support, and no fallback chains.** Every constant, address, and configuration is Arc-specific.
+**All code in this section is hardcoded for Arc mainnet (chain ID 5042). There is no chain abstraction, no multi-chain support, and no fallback chains.** Every constant, address, and configuration is Arc-specific.
 
 ---
 
@@ -20,7 +20,7 @@ import "./Vault.sol";
 contract VaultFactory {
     
     // Arc Mainnet Constants (hardcoded, no chain abstraction)
-    uint256 public constant CHAIN_ID = 1329;
+    uint256 public constant CHAIN_ID = 5042;
     
     address public vaultImplementation;
     mapping(address => address) public vaults; // owner → vault address
@@ -38,7 +38,7 @@ contract VaultFactory {
         // Verify we're on Arc mainnet
         uint256 chainId;
         assembly { chainId := chainid() }
-        require(chainId == CHAIN_ID, "This contract only deploys on Arc mainnet (1329)");
+        require(chainId == CHAIN_ID, "This contract only deploys on Arc mainnet (5042)");
         
         vaultImplementation = address(new Vault());
     }
@@ -92,8 +92,8 @@ contract Vault is ReentrancyGuard {
     enum State { Active, Claimable, Claimed, Cancelled }
 
     // Arc Mainnet Constants (hardcoded, no chain abstraction)
-    address public constant USDC = 0x...; // Arc mainnet USDC address (to be confirmed)
-    uint256 public constant CHAIN_ID = 1329; // Arc mainnet chain ID
+    address public constant USDC = 0x3600000000000000000000000000000000000000; // Arc mainnet USDC (verified, docs.arc.io)
+    uint256 public constant CHAIN_ID = 5042; // Arc mainnet chain ID
 
     address public owner;
     address public beneficiary;
@@ -514,7 +514,7 @@ function withdraw(uint256 amount) external onlyOwner onlyActive nonReentrant {
 **Files:** `test/VaultFactory.test.js`, `test/Vault.test.js`
 
 Contracts are exercised through `ethers` against a local Hardhat network
-configured with Arc's chain ID (1329, set in `hardhat.config.js`) so the
+configured with Arc's chain ID (5042, set in `hardhat.config.js`) so the
 on-chain "Arc mainnet only" checks behave the same as in production. USDC is
 stood in for by `src/mocks/MockUSDC.sol` (a plain OZ `ERC20`); a second
 double, `src/mocks/ReentrantUSDC.sol`, attempts to re-enter `claim()` from
@@ -540,16 +540,19 @@ Coverage (31 tests total, run with `npm test`):
 
 ### USDC Address on Arc
 
-The exact address of USDC on Arc mainnet should be confirmed from Circle's documentation before mainnet deployment (see `.env.example` → `ARC_USDC_ADDRESS`).
+**Resolved** (was previously an open question): `0x3600000000000000000000000000000000000000`, per docs.arc.io. Arc's native gas token *is* USDC (18 decimals, like ETH on most EVM chains); this address is Circle's separate ERC-20 *view* over that same native balance (6 decimals) — it's what `approve`/`transferFrom`/`transfer`/`balanceOf` calls target, which is exactly the standard-ERC20 interface `Vault.sol` already assumes. See `memory.md` Decision 7 for how this was confirmed and its sources. Set in `.env.example` → `ARC_USDC_ADDRESS`.
 
 The shipped implementation sets `USDC` as `immutable` rather than a literal
 `constant`, passed once into `Vault`'s constructor by `VaultFactory` at
 deployment time (`script/deploy.js`). This keeps the "no chain abstraction,
 no runtime configurability" property — the value can never change after
 deployment, and every clone shares the same immutable address via
-delegatecall — while avoiding an invalid placeholder address (`0x...`) in
-committed source. It also means the address doesn't have to be known until
-the actual Arc mainnet deployment, rather than baked into source ahead of time.
+delegatecall. That choice was originally made to avoid an invalid placeholder
+address (`0x...`) in committed source while the real address was still
+unknown; now that it's resolved, `immutable` remains the better choice
+anyway — it means `Vault.sol` never needs editing again even if Circle were
+to reissue the token at a new address, since only the deploy-time argument
+would change.
 
 Two small hardening details not shown in the snippets above, both present in
 `src/Vault.sol`:

@@ -20,14 +20,14 @@ Continuity solves this: deposit USDC into a vault, name a beneficiary, and set a
 
 - **Smart contracts:** Solidity (OpenZeppelin for ERC20/Clones/ReentrancyGuard) — **Arc mainnet only**
 - **Deployment:** Arc mainnet exclusively; gas paid in USDC (no portability to other chains)
-- **Frontend:** Minimal React + ethers.js; hardcoded for Arc mainnet (chain ID 1329)
+- **Frontend:** Minimal React + ethers.js; hardcoded for Arc mainnet (chain ID 5042)
 - **Testing:** Hardhat + Mocha/Chai (unit tests run against a local node configured with Arc's chain ID)
 
 ## Arc Mainnet Requirements
 
 **This project is built exclusively for Arc mainnet. It will not work on any other blockchain.**
 
-- Contracts are hardcoded to Arc mainnet (chain ID 1329)
+- Contracts are hardcoded to Arc mainnet (chain ID 5042)
 - All gas is paid in USDC (Arc's native gas currency)
 - Frontend only connects to Arc's RPC endpoint
 - No chain selection, no fallback chains, no portability
@@ -38,7 +38,7 @@ Continuity solves this: deposit USDC into a vault, name a beneficiary, and set a
 
 - Node.js 18+
 - A wallet with USDC on Arc mainnet (for testing and demo deployment)
-- Arc mainnet RPC access (public: https://rpc.arc.io)
+- Arc mainnet RPC access (public: https://rpc.mainnet.arc.io)
 
 ### Setup
 
@@ -61,9 +61,9 @@ npm test
 Copy `.env.example` to `.env` and fill in the real values:
 
 ```
-ARC_RPC_URL=https://rpc.arc.io
-ARC_CHAIN_ID=1329
-ARC_USDC_ADDRESS=0x... # Arc mainnet USDC token address (to be filled in)
+ARC_RPC_URL=https://rpc.mainnet.arc.io
+ARC_CHAIN_ID=5042
+ARC_USDC_ADDRESS=0x3600000000000000000000000000000000000000
 PRIVATE_KEY=<your_wallet_private_key>
 ```
 
@@ -74,8 +74,8 @@ npx hardhat run script/deploy.js --network arc
 ```
 
 The deploy script refuses to run on any network other than `arc` (which is
-itself pinned to chain ID 1329 in `hardhat.config.js`), and `VaultFactory`'s
-constructor independently reverts if the live chain ID isn't 1329. Record the
+itself pinned to chain ID 5042 in `hardhat.config.js`), and `VaultFactory`'s
+constructor independently reverts if the live chain ID isn't 5042. Record the
 printed `VaultFactory` address and update this README and the frontend config.
 
 ## Local Development (Frontend + Contracts)
@@ -84,7 +84,7 @@ To run the full stack against a local test chain instead of Arc mainnet —
 useful for developing and testing the frontend without real funds:
 
 ```bash
-# Terminal 1: local chain, pinned to chain ID 1329 (see hardhat.config.js)
+# Terminal 1: local chain, pinned to chain ID 5042 (see hardhat.config.js)
 npx hardhat node
 
 # Terminal 2: deploy MockUSDC + VaultFactory to it, mint test USDC,
@@ -98,9 +98,9 @@ npm run dev
 ```
 
 Open http://localhost:5173, connect a wallet pointed at `http://127.0.0.1:8545`
-(chain ID 1329 — e.g. add it to MetaMask as a custom network), and a
+(chain ID 5042 — e.g. add it to MetaMask as a custom network), and a
 "Mint 1,000 test USDC" button appears on every screen (dev builds only —
-`npm run build` never includes it). The frontend's hardcoded `chainId: 1329`
+`npm run build` never includes it). The frontend's hardcoded `chainId: 5042`
 check passes against this local chain exactly as it will against real Arc
 mainnet, since no separate dev/prod branching exists in the chain-ID check
 itself — only which contract addresses get compiled in
@@ -114,7 +114,7 @@ anything but the `arc` network.
 
 - **Network:** Arc mainnet
 - **VaultFactory Contract:** `[Contract address to be filled in after deployment]`
-- **USDC Token (Arc):** `[Token address to be filled in]`
+- **USDC Token (Arc):** `0x3600000000000000000000000000000000000000`
 - **Frontend Demo:** `[URL to be filled in]`
 
 ## Usage

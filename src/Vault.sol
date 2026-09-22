@@ -17,7 +17,7 @@ contract Vault is ReentrancyGuard {
     }
 
     // Arc mainnet chain ID. Never configurable, never overridden.
-    uint256 public constant CHAIN_ID = 1329;
+    uint256 public constant CHAIN_ID = 5042;
 
     // USDC token address on Arc mainnet. Fixed at implementation deployment
     // (by the factory constructor) and shared by every clone via delegatecall —

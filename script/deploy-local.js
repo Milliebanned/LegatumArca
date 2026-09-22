@@ -1,7 +1,7 @@
 // Local-testing-only deployment. Deploys MockUSDC + VaultFactory to
 // whatever network this is run against (intended: `localhost`, i.e. a
 // `npx hardhat node` instance, which hardhat.config.js pins to chain ID
-// 1329 so it satisfies the same "Arc mainnet only" checks the real
+// 5042 so it satisfies the same "Arc mainnet only" checks the real
 // contracts enforce). Also mints test USDC to the deployer and writes the
 // deployed addresses to frontend/src/deployedLocal.js so the frontend picks
 // them up automatically in dev mode.

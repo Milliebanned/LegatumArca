@@ -10,7 +10,7 @@ import "./Vault.sol";
 ///         reverts on any other chain, with no override.
 contract VaultFactory {
     // Arc mainnet chain ID. Never configurable, never overridden.
-    uint256 public constant CHAIN_ID = 1329;
+    uint256 public constant CHAIN_ID = 5042;
 
     address public immutable vaultImplementation;
     address public immutable usdc;
@@ -32,7 +32,7 @@ contract VaultFactory {
         assembly {
             chainId := chainid()
         }
-        require(chainId == CHAIN_ID, "This contract only deploys on Arc mainnet (1329)");
+        require(chainId == CHAIN_ID, "This contract only deploys on Arc mainnet (5042)");
         require(usdcAddress != address(0), "Invalid USDC address");
 
         usdc = usdcAddress;

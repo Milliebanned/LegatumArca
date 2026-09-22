@@ -2,7 +2,7 @@
 // implementation clones point at) to Arc mainnet.
 //
 // Arc mainnet only: VaultFactory's constructor itself reverts if the chain
-// ID isn't 1329, so this script can't accidentally deploy anywhere else.
+// ID isn't 5042, so this script can't accidentally deploy anywhere else.
 // There is no chain flag, no network switch beyond what's in hardhat.config.js.
 //
 // Usage:
