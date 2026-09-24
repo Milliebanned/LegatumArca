@@ -9,7 +9,9 @@
     "node": "hardhat node",
     "deploy:local": "hardhat run script/deploy-local.js --network localhost",
     "deploy:testnet": "hardhat run script/deploy-testnet.js --network arcTestnet",
-    "deploy:arc": "hardhat run script/deploy.js --network arc"
+    "deploy:arc": "hardhat run script/deploy.js --network arc",
+    "keeper:testnet": "node script/keeper.js --network testnet",
+    "keeper:mainnet": "node script/keeper.js --network mainnet"
   },
   "license": "MIT",
   "devDependencies": {
