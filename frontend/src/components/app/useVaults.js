@@ -50,7 +50,9 @@ export function useOwnerVaults() {
     try {
       const factory = new Contract(ARC_CONFIG.factoryAddress, VAULT_FACTORY_ABI, provider);
       const addresses = await factory.getVaultsByOwner(address);
-      setVaults(await Promise.all(addresses.map((a) => loadVault(a, provider))));
+      // One vault that fails to load drops out rather than blanking the page.
+      const results = await Promise.allSettled(addresses.map((a) => loadVault(a, provider)));
+      setVaults(results.filter((r) => r.status === "fulfilled").map((r) => r.value));
       setError(null);
     } catch (err) {
       setError(err?.shortMessage ?? err?.message ?? "Couldn't load vaults");

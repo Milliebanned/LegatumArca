@@ -54,6 +54,11 @@ contract Vault is ReentrancyGuard {
     uint256 public constant MAX_BENEFICIARIES = 10;
     uint256 public constant TOTAL_SHARES = 10_000; // basis points: 10_000 = 100%
     uint256 public constant MAX_NAME_LENGTH = 64; // bytes
+    // Upper bounds on the timer. Beyond being sane, they keep
+    // lastCheckInTime + interval + grace far from overflow, so deadlineTime()
+    // and every view built on it can never revert.
+    uint256 public constant MAX_CHECK_IN_INTERVAL = 3650 days;
+    uint256 public constant MAX_GRACE_PERIOD = 365 days;
 
     // USDC token address on Arc mainnet. Fixed at implementation deployment
     // (by the factory constructor) and shared by every clone via delegatecall —
@@ -144,6 +149,8 @@ contract Vault is ReentrancyGuard {
         require(_owner != address(0), "Invalid owner");
         require(bytes(_name).length <= MAX_NAME_LENGTH, "Name too long");
         require(_checkInInterval > 0, "Interval must be > 0");
+        require(_checkInInterval <= MAX_CHECK_IN_INTERVAL, "Interval too long");
+        require(_gracePeriod <= MAX_GRACE_PERIOD, "Grace period too long");
 
         owner = _owner;
         factory = msg.sender;
@@ -173,8 +180,7 @@ contract Vault is ReentrancyGuard {
 
     /// @dev Owner replaces the whole beneficiary list (add, remove, or
     ///      re-weight people) while the vault is active. Same rules as at
-    ///      creation. Not possible once any beneficiary has claimed, because
-    ///      a claim moves the vault out of ACTIVE.
+    ///      creation. Not possible once the vault is distributed or cancelled.
     function setBeneficiaries(
         address[] calldata _beneficiaries,
         uint256[] calldata _shares
@@ -299,10 +305,15 @@ contract Vault is ReentrancyGuard {
     }
 
     // USDC transfer that reports failure instead of reverting (a revert, a
-    // false return, or a non-contract token all count as failure).
+    // false or malformed return, or a non-contract token all count as
+    // failure). A caller can't fake a failure by starving the call of gas:
+    // the 1/64 of gas the EVM holds back is far less than recording a failed
+    // payout costs, so a starved transfer takes the whole call down with it.
     function _tryTransfer(address to, uint256 amount) internal returns (bool) {
         (bool ok, bytes memory ret) = USDC.call(abi.encodeCall(IERC20.transfer, (to, amount)));
-        return ok && (ret.length == 0 ? USDC.code.length > 0 : abi.decode(ret, (bool)));
+        if (!ok) return false;
+        if (ret.length == 0) return USDC.code.length > 0;
+        return ret.length == 32 && uint256(bytes32(ret)) == 1;
     }
 
     /// @dev Owner withdraws part of the balance while the vault is active.

@@ -161,6 +161,31 @@ describe("Vault", function () {
       expect(await vault.isDue()).to.equal(false);
     });
 
+    it("never marks payouts failed because the caller supplied too little gas", async function () {
+      const { vault, stranger } = await setupAndDeposit();
+      await time.increase(DEADLINE + 1);
+      const [addrs] = await vault.getBeneficiaries();
+
+      // Sweep gas limits across the whole range where distribute() could run
+      // out partway through the payout loop. Every attempt must either revert
+      // with nothing changed, or pay everyone; none may leave a share owed.
+      let paidAt = null;
+      for (let gas = 100_000; gas <= 500_000 && paidAt === null; gas += 5_000) {
+        const snapshot = await ethers.provider.send("evm_snapshot", []);
+        try {
+          await (await vault.connect(stranger).distribute({ gasLimit: gas })).wait();
+          for (const b of addrs) expect(await vault.owed(b)).to.equal(0);
+          expect(await vault.balance()).to.equal(0);
+          paidAt = gas;
+        } catch (err) {
+          if (err.name === "AssertionError") throw err;
+          expect(await vault.isDue()).to.equal(true); // reverted: untouched
+        }
+        await ethers.provider.send("evm_revert", [snapshot]);
+      }
+      expect(paidAt).to.not.equal(null);
+    });
+
     it("can only run once", async function () {
       const { vault, stranger } = await setupAndDeposit();
       await time.increase(DEADLINE + 1);

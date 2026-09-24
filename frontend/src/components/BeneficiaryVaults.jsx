@@ -21,7 +21,9 @@ export default function BeneficiaryVaults() {
     const factory = new Contract(ARC_CONFIG.factoryAddress, VAULT_FACTORY_ABI, provider);
     const addrs = await factory.getVaultsByBeneficiary(address);
 
-    const results = await Promise.all(
+    // Anyone can create a vault naming this wallet, so each one loads on its
+    // own: a vault that fails to load (or was built to) just drops out.
+    const settled = await Promise.allSettled(
       addrs.map(async (vAddr) => {
         const vault = new Contract(vAddr, VAULT_ABI, provider);
         const [name, owner, state, share, value, owed, timeLeft, historyLength] = await Promise.all([
@@ -34,7 +36,10 @@ export default function BeneficiaryVaults() {
           vault.timeUntilDeadline(),
           vault.historyLength(),
         ]);
-        const history = await vault.getHistory(0, historyLength);
+        // Recent history is enough to find this wallet's payouts, and keeps a
+        // vault with an enormous history from stalling the page.
+        const from = historyLength > 50n ? historyLength - 50n : 0n;
+        const history = await vault.getHistory(from, 50);
         const mine = history.filter(
           (e) => VAULT_ACTION[Number(e.action)] === "Payout" && e.actor.toLowerCase() === address.toLowerCase()
         );
@@ -52,9 +57,13 @@ export default function BeneficiaryVaults() {
         };
       })
     );
-    // The factory keeps listing vaults whose owner later removed this wallet;
-    // only show ones that still name it, or that paid or owe it something.
-    setVaults(results.filter((v) => v.bps > 0 || v.received > 0n || v.owed > 0n).reverse());
+    const results = settled.filter((r) => r.status === "fulfilled").map((r) => r.value);
+    // Only show vaults that hold something for this wallet or already paid
+    // or owe it. That drops vaults whose owner later removed it (the factory
+    // keeps listing those) and empty vaults anyone could create naming it,
+    // so a stranger can't fill this list, or push a misleading vault name
+    // at a beneficiary, without depositing real USDC.
+    setVaults(results.filter((v) => (v.bps > 0 && v.value > 0n) || v.received > 0n || v.owed > 0n).reverse());
   }, [provider, address]);
 
   useEffect(() => {

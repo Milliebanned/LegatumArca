@@ -38,20 +38,33 @@ export async function runKeeperPass({ wallet, factoryAddress, log = () => {} }) 
   const distributed = [];
   const errors = [];
 
-  for (const address of vaults) {
-    const vault = new ethers.Contract(address, VAULT_ABI, wallet);
-    let due;
-    let balance;
-    try {
-      [due, balance] = await Promise.all([vault.isDue(), vault.balance()]);
-    } catch (err) {
-      errors.push({ vault: address, error: err.shortMessage ?? err.message });
-      continue;
-    }
-    // An empty vault past its deadline has nothing to send; leave it alone
-    // rather than spend gas (the owner can still check in or deposit).
-    if (!due || balance === 0n) continue;
+  // Check every vault 20 at a time: one by one, a few thousand vaults
+  // (anyone can create them) would run past the cron's time limit.
+  const due = [];
+  for (let i = 0; i < vaults.length; i += 20) {
+    const batch = vaults.slice(i, i + 20);
+    const checks = await Promise.allSettled(
+      batch.map(async (address) => {
+        const vault = new ethers.Contract(address, VAULT_ABI, wallet);
+        const [isDue, balance] = await Promise.all([vault.isDue(), vault.balance()]);
+        return { address, isDue, balance };
+      })
+    );
+    checks.forEach((c, j) => {
+      if (c.status === "rejected") {
+        errors.push({ vault: batch[j], error: c.reason?.shortMessage ?? c.reason?.message });
+      } else if (c.value.isDue && c.value.balance > 0n) {
+        // An empty vault past its deadline has nothing to send; leave it
+        // alone rather than spend gas (the owner can still check in or deposit).
+        due.push(c.value.address);
+      }
+    });
+  }
 
+  // Payouts go one at a time: they all come from the same wallet, so
+  // concurrent sends would fight over its nonce.
+  for (const address of due) {
+    const vault = new ethers.Contract(address, VAULT_ABI, wallet);
     const name = await vault.name().catch(() => "");
     try {
       const receipt = await (await vault.distribute()).wait();

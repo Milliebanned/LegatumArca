@@ -122,6 +122,20 @@ describe("VaultFactory", function () {
     });
   });
 
+  it("caps the check-in interval at 10 years and the grace period at 1 year", async function () {
+    const { factory } = await deployFactory();
+    const [owner, b1] = await ethers.getSigners();
+    const DAY = 24 * 60 * 60;
+    await expect(
+      factory.connect(owner).createVault("x", [b1.address], [10000], 3650 * DAY + 1, 0)
+    ).to.be.revertedWith("Interval too long");
+    await expect(
+      factory.connect(owner).createVault("x", [b1.address], [10000], INTERVAL, 365 * DAY + 1)
+    ).to.be.revertedWith("Grace period too long");
+    // A vault at both limits works, and its views don't overflow.
+    await factory.connect(owner).createVault("x", [b1.address], [10000], 3650 * DAY, 365 * DAY);
+  });
+
   it("reverts on zero check-in interval", async function () {
     const { factory } = await deployFactory();
     const [owner, b1] = await ethers.getSigners();
