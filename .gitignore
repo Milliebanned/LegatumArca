@@ -6,3 +6,6 @@ dist/
 .env
 .DS_Store
 coverage/
+
+# Internal working log; kept local, not part of the published repo
+memory.md
