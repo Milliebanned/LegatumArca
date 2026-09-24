@@ -8,8 +8,17 @@ describe("Vault", function () {
   const DEADLINE = INTERVAL + GRACE;
   const DEPOSIT = ethers.parseUnits("100", 6);
 
+  // 50% / 30% / 20%
+  const SHARES = [5000, 3000, 2000];
+
+  async function vaultFrom(factory, owner) {
+    const [vaultAddress] = (await factory.getVaultsByOwner(owner.address)).slice(-1);
+    const Vault = await ethers.getContractFactory("Vault");
+    return Vault.attach(vaultAddress);
+  }
+
   async function setup() {
-    const [owner, beneficiary, stranger] = await ethers.getSigners();
+    const [owner, b1, b2, b3, stranger] = await ethers.getSigners();
 
     const MockUSDC = await ethers.getContractFactory("MockUSDC");
     const usdc = await MockUSDC.deploy();
@@ -18,33 +27,41 @@ describe("Vault", function () {
     const Factory = await ethers.getContractFactory("VaultFactory");
     const factory = await Factory.deploy(await usdc.getAddress());
 
-    await factory.connect(owner).createVault(beneficiary.address, INTERVAL, GRACE);
-    const vaultAddress = await factory.vaults(owner.address);
-    const Vault = await ethers.getContractFactory("Vault");
-    const vault = Vault.attach(vaultAddress);
+    await factory
+      .connect(owner)
+      .createVault("Family", [b1.address, b2.address, b3.address], SHARES, INTERVAL, GRACE);
+    const vault = await vaultFrom(factory, owner);
 
-    return { owner, beneficiary, stranger, usdc, factory, vault };
+    return { owner, b1, b2, b3, stranger, usdc, factory, vault };
   }
 
-  async function setupAndDeposit() {
+  async function setupAndDeposit(amount = DEPOSIT) {
     const ctx = await setup();
-    await ctx.usdc.connect(ctx.owner).approve(await ctx.vault.getAddress(), DEPOSIT);
-    await ctx.vault.connect(ctx.owner).deposit(DEPOSIT);
+    await ctx.usdc.connect(ctx.owner).approve(await ctx.vault.getAddress(), amount);
+    await ctx.vault.connect(ctx.owner).deposit(amount);
     return ctx;
   }
 
   describe("initialization", function () {
-    it("starts in Active state with lastCheckInTime = now", async function () {
-      const { vault } = await setup();
+    it("starts Active with name, beneficiaries and shares recorded", async function () {
+      const { vault, owner, b1, b2, b3 } = await setup();
       expect(await vault.state()).to.equal(0); // Active
+      expect(await vault.owner()).to.equal(owner.address);
+      expect(await vault.name()).to.equal("Family");
       const latest = await time.latest();
       expect(await vault.lastCheckInTime()).to.be.closeTo(latest, 5);
+
+      const [addrs, shares] = await vault.getBeneficiaries();
+      expect(addrs).to.deep.equal([b1.address, b2.address, b3.address]);
+      expect(shares.map(Number)).to.deep.equal(SHARES);
+      expect(await vault.beneficiaryCount()).to.equal(3);
+      expect(await vault.shareOf(b2.address)).to.equal(3000);
     });
 
     it("cannot be initialized twice", async function () {
-      const { vault, owner, beneficiary } = await setup();
+      const { vault, owner, b1 } = await setup();
       await expect(
-        vault.connect(owner).initialize(owner.address, beneficiary.address, INTERVAL, GRACE)
+        vault.connect(owner).initialize(owner.address, "x", [b1.address], [10000], INTERVAL, GRACE)
       ).to.be.revertedWith("Already initialized");
     });
 
@@ -52,9 +69,9 @@ describe("Vault", function () {
       const { usdc } = await setup();
       const Vault = await ethers.getContractFactory("Vault");
       const impl = await Vault.deploy(await usdc.getAddress());
-      const [, , stranger, other] = await ethers.getSigners();
+      const [, , , , stranger, other] = await ethers.getSigners();
       await expect(
-        impl.initialize(stranger.address, other.address, INTERVAL, GRACE)
+        impl.initialize(stranger.address, "x", [other.address], [10000], INTERVAL, GRACE)
       ).to.be.revertedWith("Already initialized");
     });
   });
@@ -70,10 +87,8 @@ describe("Vault", function () {
     });
 
     it("reverts if a non-owner tries to deposit", async function () {
-      const { vault, beneficiary } = await setup();
-      await expect(vault.connect(beneficiary).deposit(DEPOSIT)).to.be.revertedWith(
-        "Only owner"
-      );
+      const { vault, b1 } = await setup();
+      await expect(vault.connect(b1).deposit(DEPOSIT)).to.be.revertedWith("Only owner");
     });
   });
 
@@ -88,8 +103,8 @@ describe("Vault", function () {
     });
 
     it("reverts if a non-owner tries to check in", async function () {
-      const { vault, beneficiary } = await setup();
-      await expect(vault.connect(beneficiary).checkIn()).to.be.revertedWith("Only owner");
+      const { vault, b1 } = await setup();
+      await expect(vault.connect(b1).checkIn()).to.be.revertedWith("Only owner");
     });
 
     it("allows check-in one second before the deadline", async function () {
@@ -99,67 +114,153 @@ describe("Vault", function () {
       expect(await vault.state()).to.equal(0); // Active
     });
 
-    it("pulls the vault back from Claimable to Active", async function () {
+    it("pulls the vault back from Due to Active if it hasn't been distributed", async function () {
       const { vault, owner } = await setupAndDeposit();
       await time.increase(DEADLINE + 1);
       await vault.updateState();
-      expect(await vault.state()).to.equal(1); // Claimable
+      expect(await vault.state()).to.equal(1); // Due
 
       await vault.connect(owner).checkIn();
       expect(await vault.state()).to.equal(0); // Active
     });
+
+    it("reverts once the vault has been distributed", async function () {
+      const { vault, owner, stranger } = await setupAndDeposit();
+      await time.increase(DEADLINE + 1);
+      await vault.connect(stranger).distribute();
+      await expect(vault.connect(owner).checkIn()).to.be.revertedWith("Vault not active");
+    });
   });
 
-  describe("claim", function () {
+  describe("distribute", function () {
     it("reverts before the deadline", async function () {
-      const { vault, beneficiary } = await setupAndDeposit();
+      const { vault, stranger } = await setupAndDeposit();
       await time.increase(DEADLINE - 10);
-      await expect(vault.connect(beneficiary).claim()).to.be.revertedWith(
-        "Vault not claimable yet"
-      );
+      expect(await vault.isDue()).to.equal(false);
+      await expect(vault.connect(stranger).distribute()).to.be.revertedWith("Not due yet");
     });
 
-    it("transfers full balance to beneficiary after the deadline", async function () {
-      const { vault, beneficiary, usdc } = await setupAndDeposit();
+    it("sends every beneficiary their share in one call, with no claiming", async function () {
+      const { vault, b1, b2, b3, stranger, usdc } = await setupAndDeposit();
       await time.increase(DEADLINE + 1);
+      expect(await vault.isDue()).to.equal(true);
 
-      const before = await usdc.balanceOf(beneficiary.address);
-      await expect(vault.connect(beneficiary).claim())
-        .to.emit(vault, "Claimed")
-        .withArgs(beneficiary.address, DEPOSIT);
-      const after = await usdc.balanceOf(beneficiary.address);
+      // Anyone can trigger it: here a stranger, standing in for the keeper.
+      await expect(vault.connect(stranger).distribute())
+        .to.emit(vault, "Distributed")
+        .withArgs(DEPOSIT, stranger.address)
+        .and.to.emit(vault, "Paid")
+        .withArgs(b1.address, ethers.parseUnits("50", 6));
 
-      expect(after - before).to.equal(DEPOSIT);
-      expect(await vault.state()).to.equal(2); // Claimed
+      expect(await usdc.balanceOf(b1.address)).to.equal(ethers.parseUnits("50", 6));
+      expect(await usdc.balanceOf(b2.address)).to.equal(ethers.parseUnits("30", 6));
+      expect(await usdc.balanceOf(b3.address)).to.equal(ethers.parseUnits("20", 6));
+      expect(await vault.balance()).to.equal(0);
+      expect(await vault.state()).to.equal(2); // Distributed
+      expect(await vault.distributedPool()).to.equal(DEPOSIT);
+      expect(await vault.isDue()).to.equal(false);
     });
 
-    it("allows claim exactly one second after the deadline", async function () {
-      const { vault, beneficiary } = await setupAndDeposit();
-      await time.increase(DEADLINE + 1);
-      await expect(vault.connect(beneficiary).claim()).to.not.be.reverted;
-    });
-
-    it("reverts a second claim attempt (already Claimed)", async function () {
-      const { vault, beneficiary } = await setupAndDeposit();
-      await time.increase(DEADLINE + 1);
-      await vault.connect(beneficiary).claim();
-      await expect(vault.connect(beneficiary).claim()).to.be.revertedWith(
-        "Vault not claimable yet"
-      );
-    });
-
-    it("reverts if caller is not the beneficiary", async function () {
+    it("can only run once", async function () {
       const { vault, stranger } = await setupAndDeposit();
       await time.increase(DEADLINE + 1);
-      await expect(vault.connect(stranger).claim()).to.be.revertedWith("Only beneficiary");
+      await vault.connect(stranger).distribute();
+      await expect(vault.connect(stranger).distribute()).to.be.revertedWith("Not due yet");
     });
 
-    it("reverts if there is nothing to claim", async function () {
-      const { vault, beneficiary } = await setup(); // no deposit
+    it("gives rounding dust to the last beneficiary so nothing is stranded", async function () {
+      // 3 base units split 50/30/20 -> 1, 0, then the remainder.
+      const { vault, b1, b2, b3, stranger, usdc } = await setupAndDeposit(3n);
       await time.increase(DEADLINE + 1);
-      await expect(vault.connect(beneficiary).claim()).to.be.revertedWith(
-        "No funds to claim"
-      );
+      await vault.connect(stranger).distribute();
+      expect(await usdc.balanceOf(b1.address)).to.equal(1n);
+      expect(await usdc.balanceOf(b2.address)).to.equal(0n);
+      expect(await usdc.balanceOf(b3.address)).to.equal(2n);
+      expect(await vault.balance()).to.equal(0);
+    });
+
+    it("works with a single 100% beneficiary", async function () {
+      const { factory, usdc, owner, b1, stranger } = await setup();
+      await factory.connect(owner).createVault("Solo", [b1.address], [10000], INTERVAL, GRACE);
+      const vault = await vaultFrom(factory, owner);
+      await usdc.connect(owner).approve(await vault.getAddress(), DEPOSIT);
+      await vault.connect(owner).deposit(DEPOSIT);
+      await time.increase(DEADLINE + 1);
+
+      await expect(vault.connect(stranger).distribute()).to.emit(vault, "Paid").withArgs(b1.address, DEPOSIT);
+      expect(await usdc.balanceOf(b1.address)).to.equal(DEPOSIT);
+    });
+
+    it("finishes an empty vault without paying anyone", async function () {
+      const { vault, stranger } = await setup(); // no deposit
+      await time.increase(DEADLINE + 1);
+      await expect(vault.connect(stranger).distribute()).to.not.emit(vault, "Paid");
+      expect(await vault.state()).to.equal(2); // Distributed
+    });
+
+    it("shareValue shows each person's current share, then what they're owed", async function () {
+      const { vault, b1, stranger } = await setupAndDeposit();
+      expect(await vault.shareValue(b1.address)).to.equal(ethers.parseUnits("50", 6));
+      expect(await vault.shareValue(stranger.address)).to.equal(0);
+      await time.increase(DEADLINE + 1);
+      await vault.connect(stranger).distribute();
+      expect(await vault.shareValue(b1.address)).to.equal(0); // paid, nothing owed
+    });
+  });
+
+  describe("failed transfers", function () {
+    async function blacklistSetup() {
+      const [owner, b1, b2, b3, stranger] = await ethers.getSigners();
+      const Token = await ethers.getContractFactory("BlacklistUSDC");
+      const usdc = await Token.deploy();
+      await usdc.mint(owner.address, DEPOSIT);
+      const Factory = await ethers.getContractFactory("VaultFactory");
+      const factory = await Factory.deploy(await usdc.getAddress());
+      await factory
+        .connect(owner)
+        .createVault("Family", [b1.address, b2.address, b3.address], SHARES, INTERVAL, GRACE);
+      const vault = await vaultFrom(factory, owner);
+      await usdc.connect(owner).approve(await vault.getAddress(), DEPOSIT);
+      await vault.connect(owner).deposit(DEPOSIT);
+      await time.increase(DEADLINE + 1);
+      return { usdc, vault, b1, b2, b3, stranger };
+    }
+
+    it("pays everyone else and holds the blocked share", async function () {
+      const { usdc, vault, b1, b2, b3, stranger } = await blacklistSetup();
+      await usdc.setBlacklisted(b2.address, true);
+
+      await expect(vault.connect(stranger).distribute())
+        .to.emit(vault, "PayoutFailed")
+        .withArgs(b2.address, ethers.parseUnits("30", 6));
+
+      expect(await usdc.balanceOf(b1.address)).to.equal(ethers.parseUnits("50", 6));
+      expect(await usdc.balanceOf(b2.address)).to.equal(0);
+      expect(await usdc.balanceOf(b3.address)).to.equal(ethers.parseUnits("20", 6));
+      expect(await vault.owed(b2.address)).to.equal(ethers.parseUnits("30", 6));
+      expect(await vault.shareValue(b2.address)).to.equal(ethers.parseUnits("30", 6));
+      expect(await vault.balance()).to.equal(ethers.parseUnits("30", 6));
+    });
+
+    it("lets the blocked beneficiary withdraw once unblocked, exactly once", async function () {
+      const { usdc, vault, b2, stranger } = await blacklistSetup();
+      await usdc.setBlacklisted(b2.address, true);
+      await vault.connect(stranger).distribute();
+
+      await expect(vault.connect(b2).withdrawOwed()).to.be.revertedWith("Blacklisted");
+      await usdc.setBlacklisted(b2.address, false);
+      await expect(vault.connect(b2).withdrawOwed())
+        .to.emit(vault, "OwedWithdrawn")
+        .withArgs(b2.address, ethers.parseUnits("30", 6));
+      expect(await usdc.balanceOf(b2.address)).to.equal(ethers.parseUnits("30", 6));
+      expect(await vault.balance()).to.equal(0);
+      await expect(vault.connect(b2).withdrawOwed()).to.be.revertedWith("Nothing owed");
+    });
+
+    it("withdrawOwed is refused to anyone not owed", async function () {
+      const { vault, b1, stranger } = await blacklistSetup();
+      await vault.connect(stranger).distribute();
+      await expect(vault.connect(b1).withdrawOwed()).to.be.revertedWith("Nothing owed");
     });
   });
 
@@ -176,10 +277,10 @@ describe("Vault", function () {
     });
 
     it("reverts if a non-owner tries to withdraw", async function () {
-      const { vault, beneficiary } = await setupAndDeposit();
-      await expect(
-        vault.connect(beneficiary).withdraw(ethers.parseUnits("1", 6))
-      ).to.be.revertedWith("Only owner");
+      const { vault, b1 } = await setupAndDeposit();
+      await expect(vault.connect(b1).withdraw(ethers.parseUnits("1", 6))).to.be.revertedWith(
+        "Only owner"
+      );
     });
 
     it("reverts once the vault is cancelled", async function () {
@@ -189,23 +290,28 @@ describe("Vault", function () {
         "Vault not active"
       );
     });
+
+    it("reverts once the vault has been distributed", async function () {
+      const { vault, owner, stranger } = await setupAndDeposit();
+      await time.increase(DEADLINE + 1);
+      await vault.connect(stranger).distribute();
+      await expect(vault.connect(owner).withdraw(1n)).to.be.revertedWith("Vault not active");
+    });
   });
 
   describe("cancel", function () {
     it("returns full balance to owner and sets state to Cancelled", async function () {
       const { vault, owner, usdc } = await setupAndDeposit();
       const before = await usdc.balanceOf(owner.address);
-      await expect(vault.connect(owner).cancel())
-        .to.emit(vault, "Cancelled")
-        .withArgs(owner.address);
+      await expect(vault.connect(owner).cancel()).to.emit(vault, "Cancelled").withArgs(owner.address);
       expect((await usdc.balanceOf(owner.address)) - before).to.equal(DEPOSIT);
       expect(await vault.state()).to.equal(3); // Cancelled
       expect(await vault.balance()).to.equal(0);
     });
 
     it("reverts if a non-owner tries to cancel", async function () {
-      const { vault, beneficiary } = await setupAndDeposit();
-      await expect(vault.connect(beneficiary).cancel()).to.be.revertedWith("Only owner");
+      const { vault, b1 } = await setupAndDeposit();
+      await expect(vault.connect(b1).cancel()).to.be.revertedWith("Only owner");
     });
   });
 
@@ -219,17 +325,140 @@ describe("Vault", function () {
       expect(await vault.timeUntilDeadline()).to.equal(0);
     });
 
-    it("getVaultState reflects Claimable without a transaction", async function () {
+    it("getVaultState reflects Due without a transaction", async function () {
       const { vault } = await setupAndDeposit();
       expect(await vault.getVaultState()).to.equal(0); // Active
       await time.increase(DEADLINE + 1);
-      expect(await vault.getVaultState()).to.equal(1); // Claimable, computed live
+      expect(await vault.getVaultState()).to.equal(1); // Due, computed live
       expect(await vault.state()).to.equal(0); // storage not yet updated
     });
   });
 
+  describe("setBeneficiaries", function () {
+    it("replaces the list and shares, and the factory indexes new people", async function () {
+      const { vault, factory, owner, b1, b2, b3, stranger } = await setup();
+      await expect(
+        vault.connect(owner).setBeneficiaries([b1.address, stranger.address], [7000, 3000])
+      ).to.emit(vault, "BeneficiariesUpdated");
+
+      const [addrs, shares] = await vault.getBeneficiaries();
+      expect(addrs).to.deep.equal([b1.address, stranger.address]);
+      expect(shares.map(Number)).to.deep.equal([7000, 3000]);
+      expect(await vault.shareOf(b2.address)).to.equal(0);
+      expect(await vault.shareOf(b3.address)).to.equal(0);
+
+      const vaultAddress = await vault.getAddress();
+      expect(await factory.getVaultsByBeneficiary(stranger.address)).to.deep.equal([vaultAddress]);
+      // b1 was already indexed: not listed twice.
+      expect(await factory.getVaultsByBeneficiary(b1.address)).to.deep.equal([vaultAddress]);
+    });
+
+    it("removed beneficiaries get nothing; new ones get the new split", async function () {
+      const { vault, owner, usdc, b1, b2, stranger } = await setupAndDeposit();
+      await vault.connect(owner).setBeneficiaries([stranger.address, b1.address], [2500, 7500]);
+      await time.increase(DEADLINE + 1);
+
+      await vault.connect(b2).distribute();
+      expect(await usdc.balanceOf(b2.address)).to.equal(0);
+      expect(await usdc.balanceOf(stranger.address)).to.equal(ethers.parseUnits("25", 6));
+      expect(await usdc.balanceOf(b1.address)).to.equal(ethers.parseUnits("75", 6));
+      expect(await vault.state()).to.equal(2); // Distributed
+    });
+
+    it("applies the same validation as creation", async function () {
+      const { vault, owner, b1, b2 } = await setup();
+      await expect(
+        vault.connect(owner).setBeneficiaries([b1.address, b2.address], [5000, 4000])
+      ).to.be.revertedWith("Shares must total 100%");
+      await expect(vault.connect(owner).setBeneficiaries([owner.address], [10000])).to.be.revertedWith(
+        "Beneficiary cannot be owner"
+      );
+      await expect(vault.connect(owner).setBeneficiaries([], [])).to.be.revertedWith("1 to 10 beneficiaries");
+    });
+
+    it("is owner-only", async function () {
+      const { vault, b1 } = await setup();
+      await expect(vault.connect(b1).setBeneficiaries([b1.address], [10000])).to.be.revertedWith("Only owner");
+    });
+
+    it("is blocked once the vault has been distributed", async function () {
+      const { vault, owner, stranger } = await setupAndDeposit();
+      await time.increase(DEADLINE + 1);
+      await vault.connect(stranger).distribute();
+      await expect(vault.connect(owner).setBeneficiaries([stranger.address], [10000])).to.be.revertedWith(
+        "Vault not active"
+      );
+    });
+
+    it("only vaults can register beneficiaries with the factory", async function () {
+      const { factory, stranger } = await setup();
+      await expect(factory.connect(stranger).registerBeneficiaries([stranger.address])).to.be.revertedWith(
+        "Only vaults"
+      );
+    });
+  });
+
+  describe("history", function () {
+    const A = { Created: 0, BeneficiariesSet: 1, Deposit: 2, Withdraw: 3, CheckIn: 4, Payout: 5, PayoutFailed: 6, Cancel: 7 };
+
+    async function allHistory(vault) {
+      const n = await vault.historyLength();
+      return (await vault.getHistory(0, n)).map((e) => ({
+        action: Number(e.action),
+        actor: e.actor,
+        amount: e.amount,
+        timestamp: Number(e.timestamp),
+      }));
+    }
+
+    it("records creation, deposits, withdrawals, check-ins, edits and payouts in order", async function () {
+      const { vault, owner, b1, b2, stranger } = await setupAndDeposit();
+      await vault.connect(owner).withdraw(ethers.parseUnits("10", 6));
+      await vault.connect(owner).checkIn();
+      await vault.connect(owner).setBeneficiaries([b1.address, b2.address], [5000, 5000]);
+      await time.increase(DEADLINE + 1);
+      await vault.connect(stranger).distribute();
+
+      const h = await allHistory(vault);
+      expect(h.map((e) => e.action)).to.deep.equal([
+        A.Created,
+        A.BeneficiariesSet,
+        A.Deposit,
+        A.Withdraw,
+        A.CheckIn,
+        A.BeneficiariesSet,
+        A.Payout,
+        A.Payout,
+      ]);
+      expect(h[1].amount).to.equal(3n); // three beneficiaries at creation
+      expect(h[2].amount).to.equal(DEPOSIT);
+      expect(h[3].amount).to.equal(ethers.parseUnits("10", 6));
+      expect(h[5].amount).to.equal(2n);
+      expect(h[6].actor).to.equal(b1.address);
+      expect(h[6].amount).to.equal(ethers.parseUnits("45", 6));
+      expect(h[7].actor).to.equal(b2.address);
+      expect(h[7].amount).to.equal(ethers.parseUnits("45", 6));
+      expect(h[0].timestamp).to.be.closeTo(await time.latest(), DEADLINE + 60);
+    });
+
+    it("records cancellation with the returned amount", async function () {
+      const { vault, owner } = await setupAndDeposit();
+      await vault.connect(owner).cancel();
+      const h = await allHistory(vault);
+      expect(h.at(-1).action).to.equal(A.Cancel);
+      expect(h.at(-1).amount).to.equal(DEPOSIT);
+    });
+
+    it("getHistory pages and clamps", async function () {
+      const { vault } = await setupAndDeposit(); // 3 entries
+      expect((await vault.getHistory(1, 10)).length).to.equal(2);
+      expect((await vault.getHistory(3, 10)).length).to.equal(0);
+      expect((await vault.getHistory(0, 1))[0].action).to.equal(A.Created);
+    });
+  });
+
   describe("reentrancy", function () {
-    it("blocks a reentrant claim() attempted from inside the token transfer", async function () {
+    it("blocks a reentrant distribute() attempted from inside the token transfer", async function () {
       const [owner, beneficiary] = await ethers.getSigners();
 
       const ReentrantUSDC = await ethers.getContractFactory("ReentrantUSDC");
@@ -238,26 +467,24 @@ describe("Vault", function () {
 
       const Factory = await ethers.getContractFactory("VaultFactory");
       const factory = await Factory.deploy(await token.getAddress());
-      await factory.connect(owner).createVault(beneficiary.address, INTERVAL, GRACE);
-      const vaultAddress = await factory.vaults(owner.address);
-      const Vault = await ethers.getContractFactory("Vault");
-      const vault = Vault.attach(vaultAddress);
+      await factory.connect(owner).createVault("R", [beneficiary.address], [10000], INTERVAL, GRACE);
+      const vault = await vaultFrom(factory, owner);
+      const vaultAddress = await vault.getAddress();
 
       await token.connect(owner).approve(vaultAddress, DEPOSIT);
       await vault.connect(owner).deposit(DEPOSIT);
       await time.increase(DEADLINE + 1);
 
-      // Arm the token so its transfer() re-enters claim() once, from the
-      // beneficiary's own claim call (msg.sender stays the beneficiary).
+      // Arm the token so its transfer() tries to re-enter distribute() once.
       await token.connect(beneficiary).arm(vaultAddress);
 
-      await expect(vault.connect(beneficiary).claim())
-        .to.emit(vault, "Claimed")
+      await expect(vault.connect(beneficiary).distribute())
+        .to.emit(vault, "Paid")
         .withArgs(beneficiary.address, DEPOSIT);
 
-      // Exactly one payout reached the beneficiary — no double-claim.
+      // Exactly one payout reached the beneficiary — no double payout.
       expect(await token.balanceOf(beneficiary.address)).to.equal(DEPOSIT);
-      expect(await vault.state()).to.equal(2); // Claimed
+      expect(await vault.state()).to.equal(2); // Distributed
     });
   });
 });

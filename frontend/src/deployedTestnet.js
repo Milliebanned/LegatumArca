@@ -3,5 +3,5 @@
 // only — the real hackathon submission targets Arc mainnet via
 // script/deploy.js, which this file has no connection to.
 export default {
-  factory: "0x178909656B745aB483eD5585df4cEe68Dd715871",
+  factory: "0x16Db6D2a0ae2E065e5B772fc3d5DCac4Ad052A22",
 };
