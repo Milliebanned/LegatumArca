@@ -12,6 +12,8 @@ const MAINNET_CONFIG = {
   rpcUrl: "https://rpc.mainnet.arc.io",
   blockExplorerUrl: "https://explorer.arc.io",
   label: "Arc",
+  // Arc's gas token is USDC, so that's what the wallet should show as native.
+  nativeCurrency: { name: "USD Coin", symbol: "USDC", decimals: 18 },
   // Fill in after `npx hardhat run script/deploy.js --network arc`.
   factoryAddress: "0x0000000000000000000000000000000000000000",
   // Circle's ERC-20 view over Arc's native USDC balance (Arc's gas token
@@ -30,20 +32,39 @@ const TESTNET_CONFIG = {
   factoryAddress: testnetDeployment.factory,
 };
 
-// import.meta.env.DEV is a Vite build-time constant (true only for `npm run
-// dev`, always false in any `npm run build`) — never a runtime toggle a user
-// can reach. import.meta.env.VITE_ARC_TARGET is likewise resolved once, at
-// build time (e.g. by a Vercel project's environment variables), not read at
-// runtime from the page. It defaults to "mainnet" — the safe choice — so a
-// build only ever targets testnet if that was deliberately configured for
-// that specific deployment.
-const TARGET = import.meta.env.VITE_ARC_TARGET === "testnet" ? "testnet" : "mainnet";
+// Which network gets compiled in is decided once, at build/serve time, by
+// import.meta.env.VITE_ARC_TARGET ("local" | "testnet" | "mainnet") — never a
+// runtime toggle a user can reach. If unset, the dev server (`npm run dev`)
+// targets Arc testnet, and any production build (`npm run build`) targets
+// mainnet, so a build only ever points somewhere else if that was
+// deliberately configured for that specific deployment. The local Hardhat
+// node is opt-in via `npm run dev:local`.
+const TARGETS = ["local", "testnet", "mainnet"];
+const TARGET = TARGETS.includes(import.meta.env.VITE_ARC_TARGET)
+  ? import.meta.env.VITE_ARC_TARGET
+  : import.meta.env.DEV
+    ? "testnet"
+    : "mainnet";
 
-export const ARC_CONFIG = import.meta.env.DEV
-  ? { ...MAINNET_CONFIG, chainId: 5042, factoryAddress: localDeployment.factory, usdcAddress: localDeployment.usdc, label: "Local (Arc-pinned)" }
-  : TARGET === "testnet"
-    ? TESTNET_CONFIG
-    : MAINNET_CONFIG;
+// Local Hardhat node. hardhat.config.js pins it to chain ID 5042 so the
+// contracts' "Arc mainnet only" require() passes — which means a wallet cannot
+// tell this chain apart from real Arc mainnet by chain ID alone. The RPC URL
+// therefore has to be stated explicitly: inheriting MAINNET_CONFIG's rpcUrl
+// here (as this config used to) hands the wallet the real Arc mainnet endpoint
+// and asks for real mainnet transactions against addresses that only exist on
+// the local node. Native currency is the local node's ETH, not Arc's USDC.
+const LOCAL_CONFIG = {
+  ...MAINNET_CONFIG,
+  rpcUrl: "http://127.0.0.1:8545",
+  blockExplorerUrl: "",
+  label: "Local Hardhat",
+  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+  factoryAddress: localDeployment.factory,
+  usdcAddress: localDeployment.usdc,
+};
 
-export const IS_LOCAL_DEV = import.meta.env.DEV;
-export const IS_TESTNET_BUILD = !import.meta.env.DEV && TARGET === "testnet";
+export const ARC_CONFIG =
+  TARGET === "local" ? LOCAL_CONFIG : TARGET === "testnet" ? TESTNET_CONFIG : MAINNET_CONFIG;
+
+export const IS_LOCAL_DEV = TARGET === "local";
+export const IS_TESTNET_BUILD = TARGET === "testnet";

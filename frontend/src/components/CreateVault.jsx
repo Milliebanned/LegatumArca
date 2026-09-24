@@ -1,37 +1,57 @@
 import { useState } from "react";
-import { Contract, isAddress, parseUnits } from "ethers";
+import { Contract, parseUnits } from "ethers";
 import { useWeb3 } from "../Web3Context.jsx";
-import { ARC_CONFIG } from "../config.js";
+import { ARC_CONFIG, IS_LOCAL_DEV, IS_TESTNET_BUILD } from "../config.js";
 import { VAULT_FACTORY_ABI } from "../abis/VaultFactory.js";
 import { VAULT_ABI } from "../abis/Vault.js";
 import { ERC20_ABI } from "../abis/ERC20.js";
+import SplitEditor, { emptyRow, validateSplit } from "./SplitEditor.jsx";
+
+const DAY = 24 * 60 * 60;
+
+// Minute-scale timers only exist in testnet/local builds, so a full
+// deadline -> payout cycle can be exercised without waiting 30 days.
+const TEST_PRESETS = IS_TESTNET_BUILD || IS_LOCAL_DEV
+  ? [
+      { label: "2 minutes (test)", seconds: 120 },
+      { label: "10 minutes (test)", seconds: 600 },
+    ]
+  : [];
 
 const INTERVAL_PRESETS = [
-  { label: "30 days", seconds: 30 * 24 * 60 * 60 },
-  { label: "90 days", seconds: 90 * 24 * 60 * 60 },
-  { label: "180 days", seconds: 180 * 24 * 60 * 60 },
+  ...TEST_PRESETS,
+  { label: "30 days", seconds: 30 * DAY },
+  { label: "90 days", seconds: 90 * DAY },
+  { label: "180 days", seconds: 180 * DAY },
+  { label: "365 days", seconds: 365 * DAY },
+];
+
+const GRACE_PRESETS = [
+  { label: "None", seconds: 0 },
+  { label: "1 day", seconds: DAY },
+  { label: "7 days", seconds: 7 * DAY },
+  { label: "30 days", seconds: 30 * DAY },
 ];
 
 export default function CreateVault({ onCreated }) {
   const { signer, address, refreshBalance } = useWeb3();
-  const [beneficiary, setBeneficiary] = useState("");
-  const [beneficiaryConfirm, setBeneficiaryConfirm] = useState("");
-  const [intervalSeconds, setIntervalSeconds] = useState(INTERVAL_PRESETS[1].seconds);
-  const [graceDays, setGraceDays] = useState("7");
+  const [name, setName] = useState("");
+  const [rows, setRows] = useState([emptyRow()]);
+  const [intervalSeconds, setIntervalSeconds] = useState(INTERVAL_PRESETS[0].seconds);
+  const [graceSeconds, setGraceSeconds] = useState(0);
   const [amount, setAmount] = useState("");
+  const [confirmed, setConfirmed] = useState(false);
   const [status, setStatus] = useState(null);
   const [busy, setBusy] = useState(false);
 
-  const beneficiaryValid = isAddress(beneficiary);
-  const beneficiaryMismatch = beneficiaryConfirm.length > 0 && beneficiary !== beneficiaryConfirm;
-  const isSelf = beneficiaryValid && address && beneficiary.toLowerCase() === address.toLowerCase();
-  const canSubmit =
-    beneficiaryValid &&
-    !beneficiaryMismatch &&
-    !isSelf &&
-    beneficiaryConfirm.length > 0 &&
-    Number(amount) > 0 &&
-    !busy;
+  const split = validateSplit(rows, address);
+  const nameBytes = new TextEncoder().encode(name).length;
+  const canSubmit = split.valid && nameBytes <= 64 && confirmed && !busy;
+
+  const changeRows = (next) => {
+    setRows(next);
+    setConfirmed(false);
+  };
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -42,8 +62,7 @@ export default function CreateVault({ onCreated }) {
       // minimal-proxy clone addresses aren't cheaply predictable client-side).
       setStatus("Creating vault...");
       const factory = new Contract(ARC_CONFIG.factoryAddress, VAULT_FACTORY_ABI, signer);
-      const graceSeconds = Number(graceDays) * 24 * 60 * 60;
-      const createTx = await factory.createVault(beneficiary, intervalSeconds, graceSeconds);
+      const createTx = await factory.createVault(name.trim(), split.addresses, split.shares, intervalSeconds, graceSeconds);
       const receipt = await createTx.wait();
       const event = receipt.logs
         .map((log) => {
@@ -56,19 +75,18 @@ export default function CreateVault({ onCreated }) {
         .find((e2) => e2 && e2.name === "VaultCreated");
       const vaultAddress = event.args.vault;
 
-      // 2. Approve that specific vault to pull the deposit amount.
-      setStatus("Approving USDC...");
-      const usdc = new Contract(ARC_CONFIG.usdcAddress, ERC20_ABI, signer);
-      const decimals = await usdc.decimals();
-      const parsedAmount = parseUnits(amount, decimals);
-      const approveTx = await usdc.approve(vaultAddress, parsedAmount);
-      await approveTx.wait();
+      // 2. Optional first deposit: approve that specific vault, then deposit.
+      if (Number(amount) > 0) {
+        setStatus("Approving USDC...");
+        const usdc = new Contract(ARC_CONFIG.usdcAddress, ERC20_ABI, signer);
+        const decimals = await usdc.decimals();
+        const parsedAmount = parseUnits(amount, decimals);
+        await (await usdc.approve(vaultAddress, parsedAmount)).wait();
 
-      // 3. Deposit into the vault.
-      setStatus("Depositing USDC...");
-      const vault = new Contract(vaultAddress, VAULT_ABI, signer);
-      const depositTx = await vault.deposit(parsedAmount);
-      await depositTx.wait();
+        setStatus("Depositing USDC...");
+        const vault = new Contract(vaultAddress, VAULT_ABI, signer);
+        await (await vault.deposit(parsedAmount)).wait();
+      }
 
       setStatus(`Vault created at ${vaultAddress}`);
       await refreshBalance();
@@ -85,33 +103,21 @@ export default function CreateVault({ onCreated }) {
       <h2>Create New Vault</h2>
       <form onSubmit={handleSubmit}>
         <label>
-          Beneficiary Address
+          Vault Name
           <input
             type="text"
-            placeholder="0x..."
-            value={beneficiary}
-            onChange={(e) => setBeneficiary(e.target.value)}
+            placeholder="e.g. Family, Kids' education"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
           />
         </label>
-        <label>
-          Confirm Beneficiary Address
-          <input
-            type="text"
-            placeholder="0x..."
-            value={beneficiaryConfirm}
-            onChange={(e) => setBeneficiaryConfirm(e.target.value)}
-          />
-        </label>
-        {beneficiary && !beneficiaryValid && <p className="error">Not a valid address.</p>}
-        {beneficiaryMismatch && <p className="error">Addresses don't match.</p>}
-        {isSelf && <p className="error">Beneficiary cannot be your own address.</p>}
+        {nameBytes > 64 && <p className="error">Name is too long.</p>}
+
+        <SplitEditor rows={rows} onChange={changeRows} ownerAddress={address} />
 
         <label>
           Check-in Interval
-          <select
-            value={intervalSeconds}
-            onChange={(e) => setIntervalSeconds(Number(e.target.value))}
-          >
+          <select value={intervalSeconds} onChange={(e) => setIntervalSeconds(Number(e.target.value))}>
             {INTERVAL_PRESETS.map((p) => (
               <option key={p.seconds} value={p.seconds}>
                 {p.label}
@@ -121,24 +127,24 @@ export default function CreateVault({ onCreated }) {
         </label>
 
         <label>
-          Grace Period (days)
-          <input
-            type="number"
-            min="0"
-            value={graceDays}
-            onChange={(e) => setGraceDays(e.target.value)}
-          />
+          Grace Period
+          <select value={graceSeconds} onChange={(e) => setGraceSeconds(Number(e.target.value))}>
+            {GRACE_PRESETS.map((p) => (
+              <option key={p.seconds} value={p.seconds}>
+                {p.label}
+              </option>
+            ))}
+          </select>
         </label>
 
         <label>
-          Amount (USDC)
-          <input
-            type="number"
-            min="0"
-            step="0.000001"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-          />
+          First Deposit (USDC, optional)
+          <input type="number" min="0" step="0.000001" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        </label>
+
+        <label className="checkbox">
+          <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />
+          I've double-checked every beneficiary address. Funds sent to a wrong address can't be recovered.
         </label>
 
         <button type="submit" disabled={!canSubmit}>

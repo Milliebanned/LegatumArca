@@ -1,0 +1,580 @@
+/* Frame and resets for the LegatumArca dashboard artboard (1440x900). The
+   design's own values live inline in the components under
+   components/app/, mirroring Dashboard.dc.html; this file carries the page
+   resets from the design's <helmet> block, neutralises App.css's bare-element
+   rules inside the board, and styles the pages the design doesn't draw
+   (Vaults, Beneficiaries, Activity, Settings, forms) with the same tokens. */
+
+.db-viewport {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: #050302;
+}
+
+.db-viewport .testnet-banner {
+  margin: 0;
+  border-radius: 0;
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+.db-frame {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.db-stage {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.db-board {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  font-family: "Inter", sans-serif;
+  color: #f2efec;
+}
+
+/* --- the design's <helmet> resets, scoped to the board --- */
+
+.db-board *,
+.db-board *::before,
+.db-board *::after {
+  box-sizing: border-box;
+}
+
+.db-board a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.db-board a:hover {
+  opacity: 0.9;
+}
+
+.db-board button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  border-radius: 0;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
+/* App.css gives bare nav/headings/labels app-wide styling; inside the board
+   every box is placed by the design's inline values instead. */
+.db-board nav,
+.db-board h1,
+.db-board h2,
+.db-board h3,
+.db-board p {
+  margin: 0;
+}
+
+.db-board :focus-visible {
+  outline: 2px solid #ed2b47;
+  outline-offset: 2px;
+}
+
+/* --- wallet dropdown --- */
+
+.db-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  min-width: 200px;
+  background: #0a0808;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 14px;
+  padding: 6px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
+}
+
+.db-board .db-menu button {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 9px;
+  font-size: 13px;
+  color: #d8d6d6;
+}
+
+.db-board .db-menu button:hover {
+  background: #100c0c;
+}
+
+.db-menu .db-menu-note {
+  padding: 8px 12px 6px;
+  font-size: 11.5px;
+  color: #77767a;
+  word-break: break-all;
+}
+
+/* --- pages the design doesn't draw, in its tokens. `db-page` is the
+   scrolling layout; `db-ui` styles forms and cards inside pages and dialogs. */
+
+.db-page {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin-right: -14px;
+  padding-right: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  scrollbar-width: thin;
+  scrollbar-color: #2a2222 transparent;
+}
+
+.db-page-row {
+  display: flex;
+  gap: 22px;
+  align-items: flex-start;
+}
+
+.db-page-row > .db-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.db-board .db-ui .card,
+.db-card {
+  background: #0a0808;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 18px;
+  padding: 22px;
+  margin: 0;
+}
+
+.db-board .db-ui .card h2,
+.db-card h2 {
+  font-family: "Inter", sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  color: #f5f2ee;
+  margin: 0 0 14px;
+}
+
+.db-board .db-ui label {
+  display: block;
+  font-size: 13px;
+  color: #9c9c9f;
+  margin-bottom: 14px;
+}
+
+.db-board .db-ui input,
+.db-board .db-ui select {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 11px 14px;
+  background: #100c0c;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 12px;
+  color: #f0eeec;
+  font: inherit;
+  font-size: 14px;
+}
+
+.db-board .db-ui input:focus,
+.db-board .db-ui select:focus {
+  outline: none;
+  border-color: rgba(237, 43, 71, 0.6);
+}
+
+.db-board .db-ui button,
+.db-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #ff4d68, #de1e3c);
+  color: #fff;
+  border-radius: 12px;
+  padding: 12px 18px;
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: 0 8px 20px rgba(222, 30, 60, 0.25);
+}
+
+.db-board .db-ui button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.db-board .db-ui button.ghost,
+.db-board .db-ui button.secondary {
+  background: #100c0c;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  color: #f0eeec;
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.db-board .db-ui button.ghost {
+  padding: 10px 13px;
+  color: #9c9c9f;
+}
+
+.db-board .db-ui button.danger {
+  background: transparent;
+  border: 1px solid rgba(255, 107, 127, 0.4);
+  color: #ff6b7f;
+  box-shadow: none;
+}
+
+.db-board .db-ui button.link-button {
+  background: none;
+  box-shadow: none;
+  padding: 4px 0;
+  color: #ed2b47;
+  font-size: 13.5px;
+}
+
+.db-board .db-ui .muted {
+  color: #87868a;
+  font-size: 13px;
+}
+
+.db-board .db-ui .error {
+  color: #ff6b7f;
+  font-size: 12.5px;
+  margin: 4px 0 0;
+}
+
+.db-board .db-ui .total-ok {
+  color: #3fc97a;
+}
+
+.db-board .db-ui .mono {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12.5px;
+}
+
+.db-board .db-ui .split-header,
+.db-board .db-ui .split-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  color: #9c9c9f;
+  margin-bottom: 8px;
+}
+
+.db-board .db-ui .split-footer {
+  margin: 4px 0 16px;
+}
+
+.db-board .db-ui .split-row-wrap {
+  margin-bottom: 8px;
+}
+
+.db-board .db-ui .split-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.db-board .db-ui .split-row input {
+  margin-top: 0;
+}
+
+.db-board .db-ui .percent-input {
+  position: relative;
+  flex: 0 0 96px;
+}
+
+.db-board .db-ui .percent-input input {
+  padding-right: 28px;
+  text-align: right;
+}
+
+.db-board .db-ui .percent-input span {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #87868a;
+  pointer-events: none;
+}
+
+.db-board .db-ui label.checkbox {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  line-height: 1.45;
+}
+
+.db-board .db-ui label.checkbox input {
+  width: auto;
+  margin-top: 3px;
+  accent-color: #ed2b47;
+}
+
+.db-board .db-ui .stat-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 13.5px;
+  color: #d8d6d6;
+}
+
+.db-board .db-ui .stat-row span:first-child {
+  color: #87868a;
+}
+
+.db-board .db-ui .split-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 14px 0;
+  font-size: 13px;
+}
+
+.db-board .db-ui .split-table th {
+  text-align: left;
+  font-weight: 500;
+  color: #87868a;
+  padding: 8px 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.db-board .db-ui .split-table td {
+  padding: 10px 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  color: #f0eeec;
+}
+
+.db-board .db-ui .split-table tr:last-child td {
+  border-bottom: none;
+}
+
+.db-board .db-ui .button-row,
+.db-board .db-ui .withdraw-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.db-board .db-ui .withdraw-row input {
+  margin-top: 0;
+}
+
+.db-board .db-ui .vault-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.db-board .db-ui .vault-row:last-of-type {
+  border-bottom: none;
+}
+
+.db-board .db-ui .vault-row p {
+  margin: 0 0 4px;
+  font-size: 13.5px;
+}
+
+.db-board .db-ui .badge {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 999px;
+}
+
+.db-board .db-ui .badge-active {
+  color: #4ade80;
+  background: #122a1c;
+}
+
+.db-board .db-ui .badge-due {
+  color: #fbbf24;
+  background: #2e2410;
+}
+
+.db-board .db-ui .badge-distributed {
+  color: #a8a7ab;
+  background: #1c1919;
+}
+
+.db-board .db-ui .badge-cancelled {
+  color: #ff6b7f;
+  background: #2a1215;
+}
+
+.db-board .db-ui label.db-search {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #100c0c;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 12px;
+  padding: 0 14px;
+  color: #87868a;
+}
+
+.db-board .db-ui .db-search input {
+  border: none;
+  background: transparent;
+  margin: 0;
+  padding: 11px 0;
+}
+
+/* --- in-board dialogs (deposit, beneficiaries) --- */
+
+.db-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  background: rgba(3, 2, 2, 0.72);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.db-dialog {
+  position: relative;
+  width: 560px;
+  max-height: 780px;
+  overflow-y: auto;
+  background: #0a0808;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 20px;
+  padding: 28px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+}
+
+.db-dialog-title {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 26px;
+  font-weight: 700;
+  color: #f5f2ee;
+  margin-bottom: 6px;
+}
+
+.db-board .db-ui button.db-dialog-close {
+  padding: 0;
+  box-shadow: none;
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9c9c9f;
+  background: #100c0c;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+/* --- mobile board (the 390px artboard) --- */
+
+.db-viewport-mobile {
+  background: #060606;
+}
+
+.db-viewport-mobile .db-frame {
+  align-items: flex-start;
+}
+
+.db-col-list {
+  flex: 0 0 470px !important;
+}
+
+.db-board-mobile .dbm-page {
+  margin-top: 20px;
+}
+
+.db-board-mobile .db-page {
+  flex: none;
+  overflow: visible;
+  margin-right: 0;
+  padding-right: 0;
+}
+
+.db-board-mobile .db-page-row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+}
+
+.db-board-mobile .db-col-list {
+  flex: none !important;
+}
+
+.db-board-mobile .db-ui .card,
+.db-board-mobile .db-card {
+  padding: 16px;
+  border-radius: 16px;
+}
+
+.db-board-mobile .db-ui .card h2,
+.db-board-mobile .db-card h2 {
+  font-size: 15px;
+}
+
+.db-board-mobile .db-ui .mono {
+  word-break: break-all;
+}
+
+.db-board-mobile .db-ui .stat-row {
+  gap: 12px;
+  font-size: 12.5px;
+}
+
+.db-board-mobile .db-ui .stat-row span:last-child {
+  text-align: right;
+}
+
+.db-board-mobile .db-ui .split-table th:nth-child(3),
+.db-board-mobile .db-ui .split-table td:nth-child(3) {
+  display: none;
+}
+
+.db-board-mobile .db-ui .button-row,
+.db-board-mobile .db-ui .vault-row {
+  flex-wrap: wrap;
+}
+
+.db-board-mobile .db-ui button {
+  padding: 11px 14px;
+  font-size: 13px;
+}
+
+.db-board-mobile .db-dialog {
+  width: calc(100% - 24px);
+  max-height: calc(100% - 40px);
+  padding: 22px 18px;
+}
+
+.db-board-mobile .db-dialog-title {
+  font-size: 22px;
+  padding-right: 40px;
+}
+
+.db-board-mobile .db-menu {
+  right: 0;
+  min-width: 220px;
+}

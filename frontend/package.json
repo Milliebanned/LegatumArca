@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:local": "VITE_ARC_TARGET=local vite",
     "build": "vite build",
     "preview": "vite preview"
   },

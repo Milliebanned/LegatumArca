@@ -5,8 +5,8 @@ import { ARC_CONFIG, IS_LOCAL_DEV } from "../config.js";
 import { MOCK_ERC20_ABI } from "../abis/ERC20.js";
 
 // Local-dev-only: mints MockUSDC to the connected wallet. Tree-shaken out of
-// `npm run build` entirely — IS_LOCAL_DEV is Vite's compile-time DEV flag,
-// so this never ships to the Arc mainnet build. Never touches real USDC.
+// every non-local build — IS_LOCAL_DEV is a compile-time target flag,
+// so this never ships to the testnet or mainnet builds. Never touches real USDC.
 export default function DevFaucet() {
   const { signer, address, refreshBalance } = useWeb3();
   const [busy, setBusy] = useState(false);

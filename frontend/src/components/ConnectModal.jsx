@@ -1,0 +1,155 @@
+import { useEffect, useRef } from "react";
+import { useWeb3 } from "../Web3Context.jsx";
+import { useEip6963Providers } from "../eip6963.js";
+import { ARC_CONFIG, IS_LOCAL_DEV } from "../config.js";
+import "../ConnectModal.css";
+
+function HexMark({ size = 28 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" style={{ color: "#ED2B47" }}>
+      <polygon
+        points="12,2.5 20.5,7.25 20.5,16.75 12,21.5 3.5,16.75 3.5,7.25"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M12 2.5 L12 12 L20.5 7.25 M12 12 L3.5 7.25 M12 12 L12 21.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function ChevronRight() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" className="cm-chevron">
+      <path d="M9 5.5 L16 12 L9 18.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export default function ConnectModal({ onClose }) {
+  const { address, chainId, wrongChain, contractsMissing, error, connect, addArcNetwork } = useWeb3();
+  const wallets = useEip6963Providers();
+  const dialogRef = useRef(null);
+
+  // Escape to close, focus into the dialog, and hold the page still behind it.
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    dialogRef.current?.focus();
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [onClose]);
+
+  const needsNetwork = Boolean(address) && wrongChain;
+  const wrongNode = Boolean(address) && !wrongChain && contractsMissing;
+
+  let title = "Connect your wallet";
+  let blurb = `Choose a wallet to open your vault on ${ARC_CONFIG.label}.`;
+  if (needsNetwork) {
+    title = "Wrong network";
+    blurb = `Legatumarca runs on ${ARC_CONFIG.label} (chain ${ARC_CONFIG.chainId}). Your wallet is on chain ${chainId}.`;
+  } else if (wrongNode) {
+    title = "Contracts not found";
+    blurb = `Your wallet is on chain ${ARC_CONFIG.chainId}, but no Legatumarca factory exists at the configured address.`;
+  }
+
+  return (
+    <div className="cm-overlay" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <div className="cm-dialog" role="dialog" aria-modal="true" aria-labelledby="cm-title" tabIndex={-1} ref={dialogRef}>
+        <button type="button" className="cm-close" onClick={onClose} aria-label="Close">
+          <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 6 L18 18 M18 6 L6 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+          </svg>
+        </button>
+
+        <div className="cm-brand">
+          <HexMark />
+          <span className="cm-wordmark">
+            <span className="cm-wordmark-light">LEGATUM</span>
+            <span className="cm-wordmark-accent">ARCA</span>
+          </span>
+        </div>
+
+        <h2 className="cm-title" id="cm-title">
+          {title}
+        </h2>
+        <p className="cm-blurb">{blurb}</p>
+
+        {wrongNode && (
+          <div className="cm-warning">
+            {IS_LOCAL_DEV ? (
+              <>
+                Chain {ARC_CONFIG.chainId} is Arc mainnet's chain ID, and the local Hardhat node reuses it. Your wallet's
+                network for {ARC_CONFIG.chainId} is pointing at Arc mainnet instead of <code>{ARC_CONFIG.rpcUrl}</code>.
+                Repoint it before signing anything — otherwise these are real mainnet transactions.
+              </>
+            ) : (
+              <>The factory address in this build has no contract deployed at it. Nothing can be signed safely yet.</>
+            )}
+          </div>
+        )}
+
+        {needsNetwork && (
+          <button type="button" className="cm-primary" onClick={addArcNetwork}>
+            Switch to {ARC_CONFIG.label}
+          </button>
+        )}
+
+        {!address && (
+          <>
+            {wallets.length > 0 ? (
+              <div className="cm-wallets">
+                {wallets.map((wallet) => (
+                  <button
+                    key={wallet.info.uuid}
+                    type="button"
+                    className="cm-wallet"
+                    onClick={() => connect(wallet.provider, wallet.info.name)}
+                  >
+                    {wallet.info.icon ? (
+                      <img className="cm-wallet-icon" src={wallet.info.icon} alt="" width={26} height={26} />
+                    ) : (
+                      <span className="cm-wallet-icon cm-wallet-icon-fallback" aria-hidden="true" />
+                    )}
+                    <span className="cm-wallet-name">{wallet.info.name}</span>
+                    <ChevronRight />
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <button type="button" className="cm-primary" onClick={() => connect()}>
+                Connect Wallet
+              </button>
+            )}
+
+            {wallets.length === 0 && (
+              <p className="cm-note">
+                No wallet extension announced itself via EIP-6963. If you have one installed, the button above falls back
+                to it directly.
+              </p>
+            )}
+          </>
+        )}
+
+        {error && <p className="cm-error">{error}</p>}
+
+        <p className="cm-footnote">
+          Non-custodial. Legatumarca never holds your keys and has no admin backdoor.
+        </p>
+      </div>
+    </div>
+  );
+}

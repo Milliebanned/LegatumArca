@@ -13,6 +13,13 @@ export function Web3Provider({ children }) {
   const [usdcBalance, setUsdcBalance] = useState(null);
   const [error, setError] = useState(null);
   const [walletName, setWalletName] = useState(null);
+  // True when the wallet reports the right chain ID but the configured factory
+  // has no code at that address. Locally that means the wallet's chain 5042 is
+  // pointed at real Arc mainnet rather than the Hardhat node — the two share a
+  // chain ID, so this is the only way to tell them apart. On a real build it
+  // means the factory hasn't been deployed yet. Either way, signing anything
+  // would be a mistake, so the UI blocks on it.
+  const [contractsMissing, setContractsMissing] = useState(false);
 
   // The raw EIP-1193 provider currently in use (an EIP-6963 wallet's own
   // `provider`, or window.ethereum as a legacy fallback) — kept outside
@@ -30,6 +37,15 @@ export function Web3Provider({ children }) {
       setUsdcBalance(formatUnits(raw, decimals));
     } catch {
       setUsdcBalance(null);
+    }
+  }, []);
+
+  const verifyContracts = useCallback(async (prov) => {
+    try {
+      const code = await prov.getCode(ARC_CONFIG.factoryAddress);
+      setContractsMissing(code === "0x");
+    } catch {
+      setContractsMissing(false);
     }
   }, []);
 
@@ -75,36 +91,64 @@ export function Web3Provider({ children }) {
 
         if (Number(network.chainId) === ARC_CONFIG.chainId) {
           refreshBalance(browserProvider, addr);
+          verifyContracts(browserProvider);
+        } else {
+          setContractsMissing(false);
         }
       } catch (err) {
         setError(err?.message ?? "Failed to connect wallet");
       }
     },
-    [refreshBalance, detachRawListeners]
+    [refreshBalance, detachRawListeners, verifyContracts]
   );
 
-  // Prompts the connected wallet to add Arc as a network (EIP-3085). Useful
-  // since most wallets besides MetaMask won't have Arc pre-configured.
+  // Asks the wallet to switch to the configured chain, adding it (EIP-3085)
+  // if the wallet doesn't know it yet — most wallets besides MetaMask won't
+  // have Arc pre-configured. The chain parameters come from ARC_CONFIG so a
+  // local build points the wallet at the local node, never at mainnet.
   const addArcNetwork = useCallback(async () => {
     const raw = rawProviderRef.current;
     if (!raw) return;
+    const hexChainId = "0x" + ARC_CONFIG.chainId.toString(16);
     try {
-      await raw.request({
-        method: "wallet_addEthereumChain",
-        params: [
-          {
-            chainId: "0x" + ARC_CONFIG.chainId.toString(16),
-            chainName: ARC_CONFIG.label,
-            nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
-            rpcUrls: [ARC_CONFIG.rpcUrl],
-            blockExplorerUrls: [ARC_CONFIG.blockExplorerUrl],
-          },
-        ],
-      });
-    } catch (err) {
-      setError(err?.message ?? "Failed to add network");
+      await raw.request({ method: "wallet_switchEthereumChain", params: [{ chainId: hexChainId }] });
+    } catch (switchErr) {
+      // 4902: the wallet has no such chain configured yet, so add it.
+      if (switchErr?.code !== 4902) {
+        setError(switchErr?.message ?? "Failed to switch network");
+        return;
+      }
+      const params = {
+        chainId: hexChainId,
+        chainName: ARC_CONFIG.label,
+        nativeCurrency: ARC_CONFIG.nativeCurrency,
+        rpcUrls: [ARC_CONFIG.rpcUrl],
+      };
+      if (ARC_CONFIG.blockExplorerUrl) {
+        params.blockExplorerUrls = [ARC_CONFIG.blockExplorerUrl];
+      }
+      try {
+        await raw.request({ method: "wallet_addEthereumChain", params: [params] });
+      } catch (addErr) {
+        setError(addErr?.message ?? "Failed to add network");
+      }
     }
   }, []);
+
+  // Forget the session on this page. Wallets have no standard "disconnect"
+  // request, so the extension itself keeps its site permission.
+  const disconnect = useCallback(() => {
+    detachRawListeners();
+    rawProviderRef.current = null;
+    setProvider(null);
+    setSigner(null);
+    setAddress(null);
+    setChainId(null);
+    setUsdcBalance(null);
+    setWalletName(null);
+    setContractsMissing(false);
+    setError(null);
+  }, [detachRawListeners]);
 
   useEffect(() => detachRawListeners, [detachRawListeners]);
 
@@ -118,11 +162,27 @@ export function Web3Provider({ children }) {
       usdcBalance,
       error,
       walletName,
+      contractsMissing,
       connect,
+      disconnect,
       addArcNetwork,
       refreshBalance: () => refreshBalance(provider, address),
     }),
-    [provider, signer, address, chainId, wrongChain, usdcBalance, error, walletName, connect, addArcNetwork, refreshBalance]
+    [
+      provider,
+      signer,
+      address,
+      chainId,
+      wrongChain,
+      usdcBalance,
+      error,
+      walletName,
+      contractsMissing,
+      connect,
+      disconnect,
+      addArcNetwork,
+      refreshBalance,
+    ]
   );
 
   return <Web3Ctx.Provider value={value}>{children}</Web3Ctx.Provider>;

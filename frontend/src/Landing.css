@@ -1,0 +1,70 @@
+/* Frame and resets for the LegatumArca landing artboards. Everything visual
+   lives inline in the board components, mirroring the design source — this
+   file only carries the page resets from the design's <helmet> block and the
+   scale-to-fit frame. */
+
+.landing {
+  position: relative;
+  background: #050302;
+  color: #f2efec;
+  font-family: "Inter", sans-serif;
+}
+
+.landing *,
+.landing *::before,
+.landing *::after {
+  box-sizing: border-box;
+}
+
+.landing a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.landing a:hover {
+  opacity: 0.9;
+}
+
+/* App.css styles bare nav/header/footer/headings for the connected app. Inside
+   the artboards every box is placed by the design's own inline values, so that
+   styling has to be neutralised — a leaked `nav { margin-bottom: 16px }` alone
+   shifts the header nav 8px off its centre line. */
+.landing nav,
+.landing header,
+.landing footer,
+.landing h1,
+.landing h2,
+.landing h3,
+.landing p {
+  margin: 0;
+  gap: 0;
+  text-align: inherit;
+}
+
+/* Overrides the utilitarian button styling in App.css, which would otherwise
+   repaint the design's pill buttons. */
+.landing button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  border-radius: 0;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
+.la-frame {
+  width: 100%;
+  overflow: hidden;
+  background: #050302;
+}
+
+.la-stage {
+  margin: 0 auto;
+  overflow: hidden;
+}
+
+.la-board {
+  transform-origin: top left;
+}
