@@ -8,7 +8,7 @@
 //   node script/keeper.js --network mainnet
 //
 // Env (.env): KEEPER_PRIVATE_KEY, optional KEEPER_INTERVAL_SECONDS (default
-// 30). Mainnet also needs FACTORY_ADDRESS.
+// 30). FACTORY_ADDRESS overrides the recorded factory for either network.
 require("dotenv").config();
 const fs = require("fs");
 const path = require("path");
@@ -20,12 +20,10 @@ function arg(name) {
 
 function factoryAddress(network) {
   if (process.env.FACTORY_ADDRESS) return process.env.FACTORY_ADDRESS;
-  if (network === "testnet") {
-    // Written by script/deploy-testnet.js.
-    const file = path.join(__dirname, "..", "frontend", "src", "deployedTestnet.js");
-    const match = fs.readFileSync(file, "utf8").match(/factory:\s*"(0x[0-9a-fA-F]{40})"/);
-    if (match) return match[1];
-  }
+  // Written by script/deploy-testnet.js / script/deploy.js.
+  const file = path.join(__dirname, "..", "frontend", "src", network === "mainnet" ? "deployedMainnet.js" : "deployedTestnet.js");
+  const match = fs.readFileSync(file, "utf8").match(/factory:\s*"(0x[0-9a-fA-F]{40})"/);
+  if (match && !/^0x0{40}$/.test(match[1])) return match[1];
   throw new Error(`No factory address for ${network}. Set FACTORY_ADDRESS in .env.`);
 }
 

@@ -7,6 +7,8 @@
 //
 // Usage:
 //   npx hardhat run script/deploy.js --network arc
+const fs = require("fs");
+const path = require("path");
 const { ethers, network } = require("hardhat");
 
 async function main() {
@@ -33,10 +35,28 @@ async function main() {
   const factoryAddress = await factory.getAddress();
   const implAddress = await factory.vaultImplementation();
 
+  const deployTx = factory.deploymentTransaction();
+  const receipt = await deployTx.wait();
+
   console.log("VaultFactory deployed at:", factoryAddress);
   console.log("Vault implementation deployed at:", implAddress);
   console.log("USDC address used:", usdcAddress);
-  console.log("\nRecord these addresses in README.md and the frontend config.");
+  console.log("Deploy tx:", receipt.hash, "block", receipt.blockNumber);
+
+  // The app (frontend/src/config.js) and the keeper (frontend/api/keeper.js)
+  // read the mainnet factory from here.
+  const outPath = path.join(__dirname, "..", "frontend", "src", "deployedMainnet.js");
+  fs.writeFileSync(
+    outPath,
+    `// Written by script/deploy.js after the Arc mainnet deployment
+// (tx ${receipt.hash}, block ${receipt.blockNumber}).
+export default {
+  factory: "${factoryAddress}",
+  vaultImplementation: "${implAddress}",
+};
+`
+  );
+  console.log("Wrote frontend/src/deployedMainnet.js");
 }
 
 main().catch((error) => {

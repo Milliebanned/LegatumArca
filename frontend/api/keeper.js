@@ -6,12 +6,14 @@
 // Environment (Vercel project settings):
 //   KEEPER_PRIVATE_KEY  wallet that pays gas for distribute() (holds a few USDC)
 //   KEEPER_NETWORK      "testnet" or "mainnet"
-//   FACTORY_ADDRESS     required for mainnet; testnet defaults to src/deployedTestnet.js
+//   FACTORY_ADDRESS     optional override; defaults to src/deployedMainnet.js or
+//                       src/deployedTestnet.js for the chosen network
 //   CRON_SECRET         Vercel sends it as a bearer token on cron calls; any
 //                       other caller is refused, so strangers can't spend the
 //                       keeper's gas.
 import { keeperWallet, runKeeperPass } from "../lib/keeper.js";
 import testnetDeployment from "../src/deployedTestnet.js";
+import mainnetDeployment from "../src/deployedMainnet.js";
 
 export const config = { maxDuration: 60 };
 
@@ -22,9 +24,9 @@ export default async function handler(req, res) {
   }
 
   const network = process.env.KEEPER_NETWORK || "testnet";
-  const factoryAddress =
-    process.env.FACTORY_ADDRESS || (network === "testnet" ? testnetDeployment.factory : undefined);
-  if (!factoryAddress) {
+  const deployed = network === "mainnet" ? mainnetDeployment : testnetDeployment;
+  const factoryAddress = process.env.FACTORY_ADDRESS || deployed.factory;
+  if (!factoryAddress || /^0x0{40}$/.test(factoryAddress)) {
     return res.status(500).json({ error: `FACTORY_ADDRESS is not set for ${network}` });
   }
 

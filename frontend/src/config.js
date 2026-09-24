@@ -1,5 +1,6 @@
 import localDeployment from "./deployedLocal.js";
 import testnetDeployment from "./deployedTestnet.js";
+import mainnetDeployment from "./deployedMainnet.js";
 
 // Arc network configuration — hardcoded, not configurable at runtime. No
 // chain-selection UI ever exists in the app; which of these objects gets
@@ -14,8 +15,8 @@ const MAINNET_CONFIG = {
   label: "Arc",
   // Arc's gas token is USDC, so that's what the wallet should show as native.
   nativeCurrency: { name: "USD Coin", symbol: "USDC", decimals: 18 },
-  // Fill in after `npx hardhat run script/deploy.js --network arc`.
-  factoryAddress: "0x0000000000000000000000000000000000000000",
+  // Written by `npm run deploy:arc` (script/deploy.js).
+  factoryAddress: mainnetDeployment.factory,
   // Circle's ERC-20 view over Arc's native USDC balance (Arc's gas token
   // *is* USDC; this is the standard-interface address for approve/transfer/
   // balanceOf, per docs.arc.io/arc/references/contract-addresses). Same
