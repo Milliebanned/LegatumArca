@@ -31,7 +31,8 @@ const log = (...parts) => console.log(new Date().toISOString(), ...parts);
 
 async function main() {
   const { keeperWallet, runKeeperPass } = await import("../frontend/lib/keeper.js");
-  const network = arg("network") ?? "testnet";
+  const network = arg("network");
+  if (!network) throw new Error("Pass --network testnet or --network mainnet.");
   const once = process.argv.includes("--once");
   const wallet = keeperWallet({
     network,
@@ -45,8 +46,14 @@ async function main() {
 
   do {
     try {
-      const { checked, distributed } = await runKeeperPass({ wallet, factoryAddress: factory, log });
-      if (distributed.length > 0 || once) log(`checked ${checked} vaults, distributed ${distributed.length}`);
+      // No serverless time limit here, so every pass walks the whole list.
+      const result = await runKeeperPass({ wallet, factoryAddress: factory, log, budgetMs: Infinity });
+      if (result.distributed.length > 0 || once) {
+        log(
+          `checked ${result.checked} vaults, distributed ${result.distributed.length}, ` +
+            `skipped ${result.skipped}, wallet ${result.wallet.balance} USDC`
+        );
+      }
     } catch (err) {
       log(`pass failed: ${err.shortMessage ?? err.message}`);
     }

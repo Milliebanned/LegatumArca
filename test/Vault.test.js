@@ -114,14 +114,25 @@ describe("Vault", function () {
       expect(await vault.state()).to.equal(0); // Active
     });
 
-    it("pulls the vault back from Due to Active if it hasn't been distributed", async function () {
+    it("pulls a lapsed vault back if it hasn't been distributed", async function () {
       const { vault, owner } = await setupAndDeposit();
       await time.increase(DEADLINE + 1);
-      await vault.updateState();
-      expect(await vault.state()).to.equal(1); // Due
+      expect(await vault.getVaultState()).to.equal(1); // Due
+      expect(await vault.isDue()).to.equal(true);
 
       await vault.connect(owner).checkIn();
+      expect(await vault.getVaultState()).to.equal(0); // Active
+      expect(await vault.isDue()).to.equal(false);
+    });
+
+    it("gives strangers no way to lock the owner out of a lapsed vault", async function () {
+      const { vault, owner } = await setupAndDeposit();
+      await time.increase(DEADLINE + 1);
+      // Nothing but distribute() can change a lapsed vault's stored state, so
+      // the owner can still take the funds back without checking in first.
+      expect(vault.interface.getFunction("updateState")).to.equal(null);
       expect(await vault.state()).to.equal(0); // Active
+      await expect(vault.connect(owner).cancel()).to.not.be.reverted;
     });
 
     it("reverts once the vault has been distributed", async function () {

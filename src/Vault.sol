@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity 0.8.24;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -22,7 +22,10 @@ interface IVaultRegistry {
 contract Vault is ReentrancyGuard {
     enum State {
         Active, // owner is checking in
-        Due, // deadline passed; waiting for distribute()
+        // Deadline passed; waiting for distribute(). Never stored: a lapsed
+        // vault stays Active in storage (so nobody but the owner can change
+        // what the owner may do with it) and getVaultState() reports Due.
+        Due,
         Distributed, // shares sent to beneficiaries
         Cancelled // owner took the funds back
     }
@@ -58,6 +61,10 @@ contract Vault is ReentrancyGuard {
     // lastCheckInTime + interval + grace far from overflow, so deadlineTime()
     // and every view built on it can never revert.
     uint256 public constant MAX_CHECK_IN_INTERVAL = 3650 days;
+    // Lower bound on the timer. A window of seconds would hand a vault to its
+    // beneficiaries almost as soon as it was funded, and would let anyone
+    // mass-produce instantly-due vaults for payout keepers to waste gas on.
+    uint256 public constant MIN_CHECK_IN_INTERVAL = 1 days;
     uint256 public constant MAX_GRACE_PERIOD = 365 days;
 
     // USDC token address on Arc mainnet. Fixed at implementation deployment
@@ -148,7 +155,7 @@ contract Vault is ReentrancyGuard {
         require(!initialized, "Already initialized");
         require(_owner != address(0), "Invalid owner");
         require(bytes(_name).length <= MAX_NAME_LENGTH, "Name too long");
-        require(_checkInInterval > 0, "Interval must be > 0");
+        require(_checkInInterval >= MIN_CHECK_IN_INTERVAL, "Interval too short");
         require(_checkInInterval <= MAX_CHECK_IN_INTERVAL, "Interval too long");
         require(_gracePeriod <= MAX_GRACE_PERIOD, "Grace period too long");
 
@@ -207,7 +214,12 @@ contract Vault is ReentrancyGuard {
         uint256 total;
         for (uint256 i = 0; i < _beneficiaries.length; i++) {
             address b = _beneficiaries[i];
-            require(b != address(0), "Invalid beneficiary");
+            // A share sent to this vault, the token or the factory could never
+            // be moved again.
+            require(
+                b != address(0) && b != address(this) && b != USDC && b != factory,
+                "Invalid beneficiary"
+            );
             require(b != _owner, "Beneficiary cannot be owner");
             require(shareOf[b] == 0, "Duplicate beneficiary");
             require(_shares[i] > 0, "Share must be > 0");
@@ -226,14 +238,10 @@ contract Vault is ReentrancyGuard {
     }
 
     /// @dev Owner checks in to prove they're still active and reset the deadline.
-    ///      Also pulls the vault back from DUE to ACTIVE if it had lapsed, as
-    ///      long as it hasn't been distributed yet.
-    function checkIn() external onlyOwner nonReentrant {
-        require(state == State.Active || state == State.Due, "Vault not active");
+    ///      Works after the deadline too, as long as the vault hasn't been
+    ///      distributed yet.
+    function checkIn() external onlyOwner onlyActive nonReentrant {
         lastCheckInTime = block.timestamp;
-        if (state == State.Due) {
-            state = State.Active;
-        }
         _record(Action.CheckIn, msg.sender, 0);
         emit CheckedIn(owner, block.timestamp + checkInInterval + gracePeriod);
     }
@@ -243,19 +251,11 @@ contract Vault is ReentrancyGuard {
         return lastCheckInTime + checkInInterval + gracePeriod;
     }
 
-    /// @dev Transition ACTIVE -> DUE if the deadline has passed. Callable by
-    ///      anyone; purely a bookkeeping convenience, no funds move here.
-    function updateState() public {
-        if (state == State.Active && block.timestamp > deadlineTime()) {
-            state = State.Due;
-        }
-    }
-
     /// @dev True once the deadline has passed and the vault hasn't been
     ///      distributed or cancelled — i.e. distribute() would succeed. What
     ///      an automated keeper polls.
     function isDue() public view returns (bool) {
-        return (state == State.Active || state == State.Due) && block.timestamp > deadlineTime();
+        return state == State.Active && block.timestamp > deadlineTime();
     }
 
     /// @dev Sends every beneficiary their share straight to their wallet once

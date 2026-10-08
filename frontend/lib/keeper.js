@@ -1,8 +1,8 @@
 // Payout keeper core, shared by the Vercel cron function (api/keeper.js) and
 // the command-line keeper (script/keeper.js at the repo root).
 //
-// One pass: read every vault from the factory and call distribute() on each
-// one whose timer has run out. distribute() is open to anyone, so the keeper
+// One pass: walk the factory's vaults and call distribute() on those whose
+// timer has run out. distribute() is open to anyone, so the keeper
 // holds no special rights; its wallet only pays gas and never touches vault
 // funds. If a pass is missed, the next one (or a beneficiary pressing "Pay
 // Out Now" in the app) still pays out.
@@ -13,7 +13,10 @@ export const NETWORKS = {
   mainnet: { rpc: "https://rpc.mainnet.arc.io", chainId: 5042 },
 };
 
-const FACTORY_ABI = ["function getAllVaults() view returns (address[])"];
+const FACTORY_ABI = [
+  "function vaultCount() view returns (uint256)",
+  "function getVaults(uint256 from, uint256 count) view returns (address[])",
+];
 const VAULT_ABI = [
   "function isDue() view returns (bool)",
   "function balance() view returns (uint256)",
@@ -31,43 +34,73 @@ export function keeperWallet({ network, privateKey, rpcUrl }) {
   return new ethers.Wallet(privateKey, provider);
 }
 
-// Returns { checked, distributed: [{ vault, name, paid, held, tx }], errors: [...] }.
-export async function runKeeperPass({ wallet, factoryAddress, log = () => {} }) {
+// Anyone can create vaults, and a payout costs this wallet gas, so one pass
+// is bounded on every axis a stranger could push on:
+//   minBalance   vaults holding less are left for their beneficiaries to pay
+//                out from the app, so dust vaults can't be used to burn gas
+//   maxPayouts   payouts per pass, largest vaults first, so junk can't crowd
+//                out a real one
+//   budgetMs     time spent scanning; a pass that runs out stops there
+//   startAt      where in the factory's list the scan starts. It wraps
+//                around, so rotating it between passes reaches every vault
+//                even when one pass can't.
+export const DEFAULTS = { minBalance: 1_000_000n, maxPayouts: 25, budgetMs: 35_000, pageSize: 200, parallel: 40 };
+
+// Returns { total, checked, complete, distributed: [{ vault, name, paid, held,
+// tx }], skipped, errors, wallet: { address, balance } }.
+export async function runKeeperPass({ wallet, factoryAddress, log = () => {}, startAt = 0, ...overrides }) {
+  const { minBalance, maxPayouts, budgetMs, pageSize, parallel } = { ...DEFAULTS, ...overrides };
+  const started = Date.now();
+  const outOfTime = () => Date.now() - started > budgetMs;
+
   const factory = new ethers.Contract(factoryAddress, FACTORY_ABI, wallet);
-  const vaults = await factory.getAllVaults();
+  const total = Number(await factory.vaultCount());
   const distributed = [];
   const errors = [];
-
-  // Check every vault 20 at a time: one by one, a few thousand vaults
-  // (anyone can create them) would run past the cron's time limit.
   const due = [];
-  for (let i = 0; i < vaults.length; i += 20) {
-    const batch = vaults.slice(i, i + 20);
-    const checks = await Promise.allSettled(
-      batch.map(async (address) => {
-        const vault = new ethers.Contract(address, VAULT_ABI, wallet);
-        const [isDue, balance] = await Promise.all([vault.isDue(), vault.balance()]);
-        return { address, isDue, balance };
-      })
-    );
-    checks.forEach((c, j) => {
-      if (c.status === "rejected") {
-        errors.push({ vault: batch[j], error: c.reason?.shortMessage ?? c.reason?.message });
-      } else if (c.value.isDue && c.value.balance > 0n) {
-        // An empty vault past its deadline has nothing to send; leave it
-        // alone rather than spend gas (the owner can still check in or deposit).
-        due.push(c.value.address);
-      }
-    });
+  let checked = 0;
+
+  const first = total ? startAt % total : 0;
+  scan: for (let seen = 0; seen < total; ) {
+    const from = (first + seen) % total;
+    // A page that would run past the end stops there; the next one wraps.
+    const page = await factory.getVaults(from, Math.min(pageSize, total - seen, total - from));
+    seen += page.length;
+    if (page.length === 0) break;
+
+    for (let i = 0; i < page.length; i += parallel) {
+      if (outOfTime()) break scan;
+      const batch = page.slice(i, i + parallel);
+      const checks = await Promise.allSettled(
+        batch.map(async (address) => {
+          const vault = new ethers.Contract(address, VAULT_ABI, wallet);
+          const [isDue, balance] = await Promise.all([vault.isDue(), vault.balance()]);
+          return { address, isDue, balance };
+        })
+      );
+      checked += batch.length;
+      checks.forEach((c, j) => {
+        if (c.status === "rejected") {
+          errors.push({ vault: batch[j], error: c.reason?.shortMessage ?? c.reason?.message });
+        } else if (c.value.isDue && c.value.balance >= minBalance) {
+          due.push(c.value);
+        }
+      });
+    }
   }
 
-  // Payouts go one at a time: they all come from the same wallet, so
-  // concurrent sends would fight over its nonce.
-  for (const address of due) {
+  // Largest first, and one at a time, from one wallet. The nonce is counted
+  // here rather than asked for before each send: the provider caches that
+  // answer for a moment, which on a fast chain hands two payouts the same one.
+  let nonce = due.length ? await wallet.getNonce("pending") : 0;
+  due.sort((a, b) => (b.balance > a.balance ? 1 : b.balance < a.balance ? -1 : 0));
+  for (const { address } of due.slice(0, maxPayouts)) {
     const vault = new ethers.Contract(address, VAULT_ABI, wallet);
     const name = await vault.name().catch(() => "");
     try {
-      const receipt = await (await vault.distribute()).wait();
+      const tx = await vault.distribute({ nonce });
+      nonce += 1;
+      const receipt = await tx.wait();
       const events = receipt.logs.map((l) => {
         try {
           return vault.interface.parseLog(l);
@@ -91,5 +124,17 @@ export async function runKeeperPass({ wallet, factoryAddress, log = () => {} }) 
     }
   }
 
-  return { checked: vaults.length, distributed, errors };
+  // What's left to pay gas with (Arc's gas token is USDC, 18 decimals as the
+  // native balance), so whoever reads the result can top the wallet up in time.
+  const balance = await wallet.provider.getBalance(wallet.address).catch(() => null);
+
+  return {
+    total,
+    checked,
+    complete: checked >= total,
+    distributed,
+    skipped: Math.max(0, due.length - maxPayouts),
+    errors,
+    wallet: { address: wallet.address, balance: balance === null ? null : ethers.formatEther(balance) },
+  };
 }

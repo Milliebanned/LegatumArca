@@ -136,12 +136,45 @@ describe("VaultFactory", function () {
     await factory.connect(owner).createVault("x", [b1.address], [10000], 3650 * DAY, 365 * DAY);
   });
 
-  it("reverts on zero check-in interval", async function () {
+  it("reverts on a check-in interval under a day", async function () {
     const { factory } = await deployFactory();
     const [owner, b1] = await ethers.getSigners();
-    await expect(
-      factory.connect(owner).createVault("x", [b1.address], [10000], 0, GRACE)
-    ).to.be.revertedWith("Interval must be > 0");
+    for (const interval of [0, 1, 86400 - 1]) {
+      await expect(
+        factory.connect(owner).createVault("x", [b1.address], [10000], interval, GRACE)
+      ).to.be.revertedWith("Interval too short");
+    }
+    await factory.connect(owner).createVault("x", [b1.address], [10000], 86400, 0);
+  });
+
+  it("rejects beneficiaries that could never move their share", async function () {
+    const { factory, usdc } = await deployFactory();
+    const [owner] = await ethers.getSigners();
+    for (const stuck of [await usdc.getAddress(), await factory.getAddress()]) {
+      await expect(
+        factory.connect(owner).createVault("x", [stuck], [10000], INTERVAL, GRACE)
+      ).to.be.revertedWith("Invalid beneficiary");
+    }
+    // The vault's own address only exists once it's created.
+    const [, b1] = await ethers.getSigners();
+    await factory.connect(owner).createVault("x", [b1.address], [10000], INTERVAL, GRACE);
+    const [address] = await factory.getVaultsByOwner(owner.address);
+    const vault = (await ethers.getContractFactory("Vault")).attach(address);
+    await expect(vault.connect(owner).setBeneficiaries([address], [10000])).to.be.revertedWith(
+      "Invalid beneficiary"
+    );
+  });
+
+  it("pages through every vault", async function () {
+    const { factory } = await deployFactory();
+    const [owner, b1] = await ethers.getSigners();
+    for (let i = 0; i < 5; i++) {
+      await factory.connect(owner).createVault(`v${i}`, [b1.address], [10000], INTERVAL, GRACE);
+    }
+    const all = await factory.getAllVaults();
+    expect(await factory.getVaults(0, 2)).to.deep.equal(all.slice(0, 2));
+    expect(await factory.getVaults(3, 10)).to.deep.equal(all.slice(3));
+    expect(await factory.getVaults(5, 10)).to.deep.equal([]);
   });
 
   it("tracks vaultCount and getAllVaults across multiple owners", async function () {

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity 0.8.24;
 
 import "@openzeppelin/contracts/proxy/Clones.sol";
 import "./Vault.sol";
@@ -103,6 +103,20 @@ contract VaultFactory is IVaultRegistry {
     /// @dev Total number of vaults created.
     function vaultCount() external view returns (uint256) {
         return allVaults.length;
+    }
+
+    /// @dev Vaults [from, from + count) in creation order, clamped to the end.
+    ///      Anyone can create vaults, so callers that walk the whole list
+    ///      (payout keepers) should page through it rather than trust
+    ///      getAllVaults() to stay small enough to return.
+    function getVaults(uint256 from, uint256 count) external view returns (address[] memory page) {
+        uint256 end = from + count;
+        if (end > allVaults.length) end = allVaults.length;
+        if (from >= end) return new address[](0);
+        page = new address[](end - from);
+        for (uint256 i = from; i < end; i++) {
+            page[i - from] = allVaults[i];
+        }
     }
 
     /// @dev All vault addresses ever created, in creation order.

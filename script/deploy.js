@@ -9,7 +9,19 @@
 //   npx hardhat run script/deploy.js --network arc
 const fs = require("fs");
 const path = require("path");
-const { ethers, network } = require("hardhat");
+const { ethers, network, run } = require("hardhat");
+
+// Publishes a contract's source on the block explorer. A failure here doesn't
+// undo the deployment, so it's reported with the command to retry by hand.
+async function verify(address, constructorArguments) {
+  try {
+    await run("verify:verify", { address, constructorArguments });
+  } catch (err) {
+    if (/already verified/i.test(err.message)) return;
+    console.error(`Could not verify ${address}: ${err.message}`);
+    console.error(`Retry with: npx hardhat verify --network arc ${address} ${constructorArguments.join(" ")}`);
+  }
+}
 
 async function main() {
   if (network.name !== "arc") {
@@ -57,6 +69,11 @@ export default {
 `
   );
   console.log("Wrote frontend/src/deployedMainnet.js");
+
+  // Both take the USDC address as their only constructor argument. Every
+  // vault is a clone of the implementation, so verifying it covers them all.
+  await verify(factoryAddress, [usdcAddress]);
+  await verify(implAddress, [usdcAddress]);
 }
 
 main().catch((error) => {

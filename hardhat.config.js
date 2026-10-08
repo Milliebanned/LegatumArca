@@ -9,6 +9,25 @@ module.exports = {
   paths: {
     sources: "./src",
   },
+  // Source verification on Arc's block explorer (Blockscout), so anyone can
+  // read the contracts and an owner can check in from the explorer if the app
+  // is ever unreachable. Blockscout needs no API key; the plugin wants one set.
+  etherscan: {
+    apiKey: { arc: "blockscout", arcTestnet: "blockscout" },
+    customChains: [
+      {
+        network: "arc",
+        chainId: 5042,
+        urls: { apiURL: "https://explorer.arc.io/api", browserURL: "https://explorer.arc.io" },
+      },
+      {
+        network: "arcTestnet",
+        chainId: 5042002,
+        urls: { apiURL: "https://explorer.testnet.arc.io/api", browserURL: "https://explorer.testnet.arc.io" },
+      },
+    ],
+  },
+  sourcify: { enabled: false },
   networks: {
     // Local network mirrors Arc mainnet's chain ID (5042) so the on-chain
     // "Arc mainnet only" checks in VaultFactory/Vault behave the same in
