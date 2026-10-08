@@ -1,168 +1,111 @@
-# Legatumarca
+# Legatum Arca
 
-A non-custodial USDC vault on Arc mainnet that releases funds to a named beneficiary automatically if the owner stops checking in.
+A non-custodial dead man's switch for USDC on Arc. You deposit into a vault, name the people who should receive it, and check in on a schedule you choose. If you stop checking in, the vault pays them automatically.
 
-## Why This Matters
+## Why
 
-Cryptocurrency enables self-custody — you hold your own keys, no bank or intermediary required. But self-custody has a hard problem that traditional finance solved decades ago: what happens to your money if you die, lose access, or disappear? With a bank account, heirs can recover funds. With self-custodied crypto, if you're gone, the money is gone forever. There's no inheritance mechanism, no succession process, nothing.
+Self-custody has no inheritance. If you die or lose access to your wallet, the money is stuck: there is no bank to call and nobody your family can ask. Legatum Arca gives a wallet a succession plan that needs no custodian, lawyer or middleman, only a contract that enforces the dates.
 
-Legatumarca solves this: deposit USDC into a vault, name a beneficiary, and set a check-in interval. As long as you keep checking in, you retain full control. If you stop checking in for long enough, the vault automatically becomes claimable by your beneficiary — no custodian, no middleman, just contract-enforced logic.
+## How it works
 
-## How It Works
+1. **Create a vault.** Give it a name, pick a check-in window (30 days to a year) and an optional grace period, and name 1 to 10 beneficiaries with a percentage each.
+2. **Deposit USDC.** It stays yours: you can withdraw part of it or close the vault at any time while it is active.
+3. **Check in.** One transaction before the window ends resets the clock.
+4. **If you go silent,** the window and then the grace period run out, and the vault sends every beneficiary their share, straight to their wallet. Nobody has to claim anything.
+5. **Safety net.** Checking in after the deadline still works, as long as the payout has not been sent yet.
 
-1. **Create a vault** — Connect your wallet, deposit USDC, name a beneficiary address, pick a check-in interval (30/90/180 days) and grace period.
-2. **Check in periodically** — Call `checkIn()` to reset the countdown and prove you're still active. This is the only ongoing action required; everything else is optional.
-3. **Beneficiary claim (if you're inactive)** — If the deadline passes with no check-in, the beneficiary can call `claim()` to withdraw the funds.
-4. **Safety net** — If you check in after the deadline but before the beneficiary claims, you regain full control immediately. There's always a way back.
-5. **Withdraw or cancel anytime** — While active, you can withdraw funds or cancel the vault entirely. It's not a lockup.
+You can have any number of vaults, each with its own people, shares and timer, and you can change a vault's beneficiaries while it is active.
 
-## Tech Stack
+## Live deployment
 
-- **Smart contracts:** Solidity (OpenZeppelin for ERC20/Clones/ReentrancyGuard) — **Arc mainnet only**
-- **Deployment:** Arc mainnet exclusively; gas paid in USDC (no portability to other chains)
-- **Frontend:** Minimal React + ethers.js; hardcoded for Arc mainnet (chain ID 5042)
-- **Testing:** Hardhat + Mocha/Chai (unit tests run against a local node configured with Arc's chain ID)
+| | |
+|---|---|
+| Network | Arc mainnet (chain ID 5042) |
+| VaultFactory | _to be filled in after the mainnet deployment_ |
+| USDC | `0x3600000000000000000000000000000000000000` |
+| App | _to be filled in_ |
 
-## Arc Mainnet Requirements
+A staging build runs against Arc testnet at https://frontend-eta-teal-52.vercel.app. Its factory is [`0xEc4d67B9e5C7D68AC21E12f81796aD9d072Dd720`](https://explorer.testnet.arc.io/address/0xEc4d67B9e5C7D68AC21E12f81796aD9d072Dd720#code), verified on the explorer.
 
-**This project is built exclusively for Arc mainnet. It will not work on any other blockchain.**
+## Contracts
 
-- Contracts are hardcoded to Arc mainnet (chain ID 5042)
-- All gas is paid in USDC (Arc's native gas currency)
-- Frontend only connects to Arc's RPC endpoint
-- No chain selection, no fallback chains, no portability
+- `src/VaultFactory.sol` deploys one `Vault` implementation and creates each vault as a minimal-proxy clone of it. It indexes vaults by owner and by beneficiary.
+- `src/Vault.sol` holds one vault's USDC, beneficiaries, timer and history.
 
-## Local Development
+Things worth knowing before you rely on it:
 
-### Prerequisites
-
-- Node.js 18+
-- A wallet with USDC on Arc mainnet (for testing and demo deployment)
-- Arc mainnet RPC access (public: https://rpc.mainnet.arc.io)
-
-### Setup
-
-```bash
-git clone <repo>
-cd legatumarca
-
-# Install dependencies
-npm install
-
-# Compile contracts
-npm run build
-
-# Run tests
-npm test
-```
-
-### Environment
-
-Copy `.env.example` to `.env` and fill in the real values:
-
-```
-ARC_RPC_URL=https://rpc.mainnet.arc.io
-ARC_CHAIN_ID=5042
-ARC_USDC_ADDRESS=0x3600000000000000000000000000000000000000
-PRIVATE_KEY=<your_wallet_private_key>
-```
-
-### Deploy to Arc Mainnet
-
-```bash
-npx hardhat run script/deploy.js --network arc
-```
-
-The deploy script refuses to run on any network other than `arc` (which is
-itself pinned to chain ID 5042 in `hardhat.config.js`), and `VaultFactory`'s
-constructor independently reverts if the live chain ID isn't 5042. Record the
-printed `VaultFactory` address and update this README and the frontend config.
-
-## Local Development (Frontend + Contracts)
-
-To run the full stack against a local test chain instead of Arc mainnet —
-useful for developing and testing the frontend without real funds:
-
-```bash
-# Terminal 1: local chain, pinned to chain ID 5042 (see hardhat.config.js)
-npx hardhat node
-
-# Terminal 2: deploy MockUSDC + VaultFactory to it, mint test USDC,
-# and write the addresses into frontend/src/deployedLocal.js
-npx hardhat run script/deploy-local.js --network localhost
-
-# Terminal 3: frontend dev server
-cd frontend
-npm install
-npm run dev
-```
-
-Open http://localhost:5173, connect a wallet pointed at `http://127.0.0.1:8545`
-(chain ID 5042 — add it as a custom network in whichever wallet extension you connect with), and a
-"Mint 1,000 test USDC" button appears on every screen (dev builds only —
-`npm run build` never includes it). The frontend's hardcoded `chainId: 5042`
-check passes against this local chain exactly as it will against real Arc
-mainnet, since no separate dev/prod branching exists in the chain-ID check
-itself — only which contract addresses get compiled in
-(`frontend/src/config.js`).
-
-`script/deploy-local.js` is local-testing-only and is never used for the Arc
-mainnet deployment — that's `script/deploy.js`, which refuses to run against
-anything but the `arc` network.
-
-## Live Deployment
-
-- **Network:** Arc mainnet
-- **VaultFactory Contract:** `[Contract address to be filled in after deployment]`
-- **USDC Token (Arc):** `0x3600000000000000000000000000000000000000`
-- **Frontend Demo:** `[URL to be filled in]`
-
-## Usage
-
-1. Open the frontend (URL above).
-2. Connect your wallet.
-3. Deposit USDC and set beneficiary/intervals.
-4. Check in periodically (as often as you'd like; there's no penalty for frequent check-ins).
-5. Beneficiary can claim after the deadline expires.
-
-## Project Structure
-
-```
-legatumarca/
-├── README.md
-├── memory.md
-├── hardhat.config.js
-├── src/
-│   ├── VaultFactory.sol
-│   ├── Vault.sol
-│   └── mocks/          # test-only doubles, never deployed
-├── test/
-│   ├── VaultFactory.test.js
-│   ├── Vault.test.js
-│   └── utils/time.js
-├── script/
-│   └── deploy.js
-├── frontend/
-│   ├── src/
-│   │   ├── App.jsx
-│   │   ├── CreateVault.jsx
-│   │   ├── OwnerDashboard.jsx
-│   │   └── BeneficiaryClaim.jsx
-│   └── package.json
-└── docs/
-    ├── PRD.md
-    ├── ARCHITECTURE.md
-    ├── DESIGN.md
-    └── TASKS.md
-```
+- **No admin.** There is no owner role on the factory, no upgrade path, no pause and no fee. After deployment nobody but a vault's owner can move its funds, and only the contract's rules decide when beneficiaries are paid.
+- **Payout is permissionless.** Once a vault's deadline has passed, anyone can call `distribute()`, and it can only send each beneficiary their fixed share. A keeper does this automatically, and beneficiaries can do it themselves from the app, so payout never depends on one service.
+- **One bad address can't block the rest.** If a transfer to a beneficiary fails, that share is held in the vault for them to collect later and everyone else is still paid.
+- **Limits.** The check-in window is 1 day to 10 years, the grace period up to 1 year. A beneficiary can't be the owner, the vault, the token or the factory. Shares are basis points and must total 100%.
+- **History on-chain.** Each vault records its own actions, so the app needs no indexer.
+- **Arc only.** Both contracts refuse to deploy on any chain other than Arc mainnet.
 
 ## Security
 
-- No privileged admin role or backdoor.
-- Reentrancy guards on all external calls.
-- Checks-effects-interactions pattern enforced throughout.
-- Ownership and access control via onchain logic only.
-- Contract fully auditable on-chain; no hidden state.
+Legatum Arca has **not been audited**, and a vault is **not a legal will**. Use amounts you could afford to lose.
+
+What has been done: 59 Hardhat tests covering the full lifecycle, including re-entrancy and failed-transfer cases; a Slither pass with no high-severity findings; re-entrancy guards on every function that moves funds; and a testnet run of each release before mainnet.
+
+Risks the contract can't remove:
+
+- Anyone holding the owner's key can withdraw everything.
+- A beneficiary who loses their key loses their share. Check every address before you fund a vault.
+- If you forget to check in, the vault pays out. The app can add each deadline to your calendar; there are no email or message reminders yet.
+- The hosted keeper runs once a day, so an automatic payout can arrive up to about a day after the deadline.
+
+## Run it locally
+
+Requires Node.js 18 or newer.
+
+```bash
+npm install
+npm test                # contract tests
+
+# full stack against a local chain
+npm run node            # terminal 1: Hardhat node on chain ID 5042
+npm run deploy:local    # terminal 2: MockUSDC + factory, mints test USDC
+cd frontend && npm install && npm run dev:local
+```
+
+Open http://localhost:5173 and connect a wallet pointed at `http://127.0.0.1:8545` (chain ID 5042). The local chain reuses Arc mainnet's chain ID so the contracts' chain check runs unchanged, which means your wallet can't tell the two apart: check its RPC before signing. The account dialog has a button that mints test USDC.
+
+`npm run dev` in `frontend/` targets Arc testnet instead. A production build (`npm run build`) targets mainnet.
+
+## Deploy
+
+Copy `.env.example` to `.env` and fill it in, then:
+
+```bash
+npm run deploy:arc
+```
+
+The script refuses any network but Arc mainnet, writes the factory address to `frontend/src/deployedMainnet.js`, and verifies both contracts on the explorer.
+
+### Keeper
+
+`frontend/api/keeper.js` is a Vercel cron function that pays out vaults whose timer has run out. Its wallet only pays gas and has no special rights. It needs `KEEPER_NETWORK` (`mainnet` or `testnet`), `KEEPER_PRIVATE_KEY` and `CRON_SECRET` in the Vercel project. The same pass can be run by hand:
+
+```bash
+npm run keeper:mainnet -- --once
+```
+
+It skips vaults holding less than 1 USDC and pays at most 25 vaults per pass, largest first, so that spam vaults can't drain its gas or crowd out real ones.
+
+## Layout
+
+```
+src/                 Vault.sol, VaultFactory.sol, test-only mocks
+test/                Hardhat tests
+script/              deploy.js (mainnet), deploy-testnet.js, deploy-local.js, keeper.js
+frontend/
+  src/components/    landing page and dashboard (React + ethers.js)
+  api/keeper.js      daily payout cron
+  lib/keeper.js      keeper logic shared with script/keeper.js
+docs/                original planning notes
+```
+
+The files in `docs/` are the planning notes the project started from. They describe an earlier design (a single beneficiary who claims) and have not been kept up to date; the contracts and this README are the reference.
 
 ## License
 
