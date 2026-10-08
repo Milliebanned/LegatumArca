@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Web3Provider, useWeb3 } from "./Web3Context.jsx";
 import Landing from "./components/Landing.jsx";
 import ConnectModal from "./components/ConnectModal.jsx";
-import { MOBILE_QUERY, ScaledBoard, useMediaQuery } from "./components/app/AppShell.jsx";
 import AppScreen from "./components/app/AppScreen.jsx";
 import { ARC_CONFIG, IS_LOCAL_DEV, IS_TESTNET_BUILD } from "./config.js";
 import "./App.css";
@@ -27,7 +26,6 @@ const BANNER = IS_TESTNET_BUILD ? TESTNET_BANNER : IS_LOCAL_DEV ? LOCAL_BANNER :
 
 function Shell() {
   const { address, wrongChain, contractsMissing, disconnect } = useWeb3();
-  const mobile = useMediaQuery(MOBILE_QUERY);
   const [connectOpen, setConnectOpen] = useState(false);
 
   const blocked = Boolean(address) && (wrongChain || contractsMissing);
@@ -49,9 +47,8 @@ function Shell() {
 
   return (
     <>
-      <ScaledBoard banner={BANNER} mobile={mobile}>
-        {!blocked && <AppScreen key={address} mobile={mobile} onDisconnect={disconnect} />}
-      </ScaledBoard>
+      {BANNER}
+      {!blocked && <AppScreen key={address} onDisconnect={disconnect} />}
       {/* Wrong network, or no factory at the configured address: nothing can
           be signed, so the dialog stays up until that's fixed or the wallet
           is disconnected. */}

@@ -1,8 +1,7 @@
-import { formatAmount, formatDate, formatShortDate, formatSpan, formatUsd } from "./format.js";
+import { DAY, formatAgo, formatDeadline, formatSpan, formatUsdc, shortAddress } from "./format.js";
 
-// Turns loaded vaults (see useVaults.js) into the exact props the dashboard
-// artboard renders. Kept free of React and chain calls so the same props can
-// come from fixtures when checking the page against the design.
+// Turns loaded vaults (see useVaults.js) into what the dashboard renders.
+// Kept free of React and chain calls so it can be fed fixtures.
 
 // Stored state, advanced to Due once the deadline has passed (the same rule
 // as Vault.getVaultState()).
@@ -11,146 +10,166 @@ export function liveState(v, now) {
   return v.storedState;
 }
 
-export function checkInLine(v, now) {
+export const isOpen = (v, now) => ["Active", "Due"].includes(liveState(v, now));
+export const vaultName = (v) => v.name || "Untitled vault";
+
+// Seconds until the check-in window closes; negative once it has.
+const windowLeft = (v, now) => v.lastCheckIn + v.interval - now;
+
+// "Check in soon" starts 14 days out, the first reminder mark. Windows too
+// short for that (test builds) use their last quarter.
+const soonAt = (v) => (v.interval >= 28 * DAY ? 14 * DAY : v.interval / 4);
+
+// ok -> warn -> grace -> due -> released, or closed if the owner cancelled.
+export function phase(v, now) {
   const state = liveState(v, now);
-  if (state === "Distributed") return "Paid out to beneficiaries";
-  if (state === "Cancelled") return "Vault cancelled";
-  if (state === "Due") return "Timer ended · payout within a day";
-  const due = v.lastCheckIn + v.interval;
-  if (now < due) return `Next check-in in ${formatSpan(due - now)}`;
-  return `Check-in overdue · grace ends in ${formatSpan(v.lastCheckIn + v.interval + v.grace - now)}`;
+  if (state === "Distributed") return "released";
+  if (state === "Cancelled") return "closed";
+  if (state === "Due") return "due";
+  const left = windowLeft(v, now);
+  return left <= 0 ? "grace" : left <= soonAt(v) ? "warn" : "ok";
 }
 
-// Share of the check-in interval still remaining, as a CSS width.
-export function progressWidth(v, now) {
-  if (liveState(v, now) !== "Active") return "0%";
-  const left = v.lastCheckIn + v.interval - now;
-  const pct = Math.max(0, Math.min(1, left / v.interval)) * 100;
-  return `${Math.round(pct)}%`;
-}
+// Tone class and pill text for each phase.
+const STATUS = {
+  ok: ["ok", "Armed"],
+  warn: ["warn", "Check in soon"],
+  grace: ["alert", "Grace period"],
+  due: ["alert", "Payout due"],
+  released: ["ok", "Released"],
+  closed: ["off", "Closed"],
+};
 
-const isOpen = (v, now) => ["Active", "Due"].includes(liveState(v, now));
+const people = (n) => `${n} ${n === 1 ? "person" : "people"}`;
 
-// Newest first, open vaults ahead of distributed/cancelled ones.
-export function sortVaults(vaults, now) {
-  return [...vaults].reverse().sort((a, b) => Number(isOpen(b, now)) - Number(isOpen(a, now)));
-}
+// Everything the ring, the facts beside it and a vault row need.
+export function vaultView(v, now) {
+  const p = phase(v, now);
+  // Clock skew can put a fresh check-in a few seconds past the full window.
+  const left = Math.min(windowLeft(v, now), v.interval);
+  const graceLeft = left + v.grace;
+  // "62 days" -> the ring's 62 over "days left"; the unit drops to hours or
+  // minutes by itself once less than a day remains.
+  const split = (seconds) => formatSpan(seconds).split(" ");
+  const [windowCount, windowUnit] = split(v.interval);
 
-export function vaultCard(v, now) {
+  let [big, unit] = split(left);
+  let caption = `${unit} left`;
+  let fill = Math.max(0, left) / v.interval;
+  let meter =
+    unit.replace(/s$/, "") === windowUnit.replace(/s$/, "")
+      ? `${big} of ${windowCount} ${windowUnit} left`
+      : `${big} ${unit} left of ${windowCount} ${windowUnit}`;
+  if (p === "grace") {
+    [big, unit] = split(graceLeft);
+    caption = `${unit} of grace left`;
+    fill = v.grace ? graceLeft / v.grace : 0;
+    meter = `Window missed · ${formatSpan(graceLeft)} of grace`;
+  } else if (p === "due") {
+    big = "0";
+    caption = "payout due";
+    meter = "Timer ended · paying out";
+  } else if (p === "released") {
+    big = "✓";
+    caption = `released to ${people(v.beneficiaries.length)}`;
+    fill = 1;
+    meter = "Paid to beneficiaries";
+  } else if (p === "closed") {
+    big = "–";
+    caption = "vault closed";
+    fill = 0;
+    meter = "Closed by you";
+  }
+
+  const live = p === "ok" || p === "warn" || p === "grace";
   return {
     address: v.address,
-    name: v.name || "Untitled vault",
-    status: liveState(v, now),
-    balance: formatUsd(v.balanceRaw),
-    checkIn: checkInLine(v, now),
-    progress: progressWidth(v, now),
+    name: vaultName(v),
+    phase: p,
+    tone: STATUS[p][0],
+    state: STATUS[p][1],
+    big,
+    caption,
+    fill: Math.max(0, Math.min(1, fill)),
+    meter,
+    amount: formatUsdc(v.balanceRaw),
+    due: live ? formatDeadline(v.lastCheckIn + v.interval + (p === "grace" ? v.grace : 0), now) : "–",
+    window: formatSpan(v.interval),
+    grace: v.grace > 0 ? formatSpan(v.grace) : "None",
   };
 }
 
-const DAY = 86400;
-const INFLOW = new Set(["Deposit"]);
-const OUTFLOW = new Set(["Withdraw", "Payout", "Cancel"]);
-
-// Change in total vault value over the last 30 days, from recorded flows.
-// USDC doesn't earn anything in a vault, so this is deposits minus money out.
-export function thirtyDayChange(vaults, now) {
-  let total = 0n;
-  let net = 0n;
-  for (const v of vaults) {
-    total += v.balanceRaw;
-    for (const e of v.history) {
-      if (e.timestamp < now - 30 * DAY) continue;
-      if (INFLOW.has(e.action)) net += e.amount;
-      if (OUTFLOW.has(e.action)) net -= e.amount;
-    }
-  }
-  const before = total - net;
-  if (before <= 0n) return { up: true, text: total > 0n ? "▲ New" : "▲ 0.0%" };
-  const pct = (Number(net) / Number(before)) * 100;
-  return { up: pct >= 0, text: `${pct >= 0 ? "▲" : "▼"} ${Math.abs(pct).toFixed(1)}%` };
+// Open vaults first, each group oldest first, so a new vault lands at the
+// end of the list.
+export function sortVaults(vaults, now) {
+  return [...vaults].sort((a, b) => Number(isOpen(b, now)) - Number(isOpen(a, now)));
 }
 
-const shortAddr = (a) => `${a.slice(0, 6)}…${a.slice(-4)}`;
+export function headline(vaults, now) {
+  if (vaults.length === 0) return "No vaults yet. Create one to name the people you trust.";
+  const by = (p) => vaults.find((v) => phase(v, now) === p);
+  const due = by("due");
+  if (due) return `${vaultName(due)} has run out and is paying out. Checking in first stops it.`;
+  const grace = by("grace");
+  if (grace) {
+    const left = formatSpan(windowLeft(grace, now) + grace.grace);
+    return `${vaultName(grace)} missed its check-in. ${left} of grace left.`;
+  }
+  const soon = by("warn");
+  if (soon) return `${vaultName(soon)} needs a check-in within ${formatSpan(windowLeft(soon, now))}.`;
+  return vaults.some((v) => isOpen(v, now)) ? "All vaults are armed." : "No open vaults.";
+}
 
-const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "es"}`;
+export function totals(vaults, now) {
+  const open = vaults.filter((v) => isOpen(v, now));
+  const timed = open
+    .filter((v) => liveState(v, now) === "Active")
+    .sort((a, b) => windowLeft(a, now) - windowLeft(b, now));
+  const next = timed[0];
+  const named = new Set(open.flatMap((v) => v.beneficiaries.map((b) => b.address.toLowerCase())));
+  return {
+    total: formatUsdc(vaults.reduce((sum, v) => sum + v.balanceRaw, 0n)),
+    count: open.length,
+    next: !next ? "–" : windowLeft(next, now) > 0 ? formatSpan(windowLeft(next, now)) : "Overdue",
+    nextName: next ? vaultName(next) : "No open vaults",
+    people: named.size,
+  };
+}
 
-// One design activity row per history entry, across all vaults.
-export function activityItems(vaults) {
+// One line per history entry, across all vaults, newest first. `kind` picks
+// the dot: c = check-in, r = money leaving to beneficiaries, d = the rest.
+export function activityItems(vaults, now, labels = {}) {
+  const who = (address) => labels[address.toLowerCase()] || shortAddress(address);
   const items = [];
   for (const v of vaults) {
-    const name = v.name || "Untitled vault";
-    const firstBeneficiaries = v.history.find((e) => e.action === "BeneficiariesSet");
+    const name = vaultName(v);
+    const first = v.history.find((e) => e.action === "BeneficiariesSet");
     for (const e of v.history) {
-      const base = { key: `${v.address}-${e.index}`, timestamp: e.timestamp, index: e.index, date: formatDate(e.timestamp), shortDate: formatShortDate(e.timestamp), vault: name };
-      switch (e.action) {
-        case "Created":
-          items.push({ ...base, icon: "hex", title: "Vault created", sub: name, tone: "muted" });
-          break;
-        case "BeneficiariesSet":
-          items.push({
-            ...base,
-            icon: "users",
-            title: e === firstBeneficiaries ? "Beneficiary added" : "Beneficiaries updated",
-            sub: plural(Number(e.amount), "address"),
-            tone: "muted",
-          });
-          break;
-        case "Deposit":
-          items.push({ ...base, icon: "receive", title: "Deposit received", sub: `+$${formatAmount(e.amount)} USDC`, tone: "up" });
-          break;
-        case "Withdraw":
-          items.push({ ...base, icon: "deposit", title: "Withdrawal", sub: `−$${formatAmount(e.amount)} USDC`, tone: "muted" });
-          break;
-        case "CheckIn":
-          items.push({ ...base, icon: "clock", title: "Checked in", sub: name, tone: "muted" });
-          break;
-        case "Payout":
-          items.push({
-            ...base,
-            icon: "receive",
-            title: "Paid to beneficiary",
-            sub: `$${formatAmount(e.amount)} to ${shortAddr(e.actor)}`,
-            tone: "muted",
-          });
-          break;
-        case "PayoutFailed":
-          items.push({
-            ...base,
-            icon: "users",
-            title: "Payout held",
-            sub: `$${formatAmount(e.amount)} for ${shortAddr(e.actor)}`,
-            tone: "muted",
-          });
-          break;
-        case "Cancel":
-          items.push({ ...base, icon: "hex", title: "Vault cancelled", sub: name, tone: "muted" });
-          break;
-        default:
-          break;
-      }
+      const amount = `${formatUsdc(e.amount)} USDC`;
+      const line = {
+        Created: ["d", `Created ${name}`],
+        BeneficiariesSet:
+          e === first
+            ? ["d", `Named ${people(Number(e.amount))} in ${name}`]
+            : ["d", `Changed the beneficiaries of ${name}`],
+        Deposit: ["d", `Deposited ${amount} into ${name}`],
+        Withdraw: ["d", `Withdrew ${amount} from ${name}`],
+        CheckIn: ["c", `Checked in to ${name}`],
+        Payout: ["r", `${name} paid ${amount} to ${who(e.actor)}`],
+        PayoutFailed: ["r", `${name} is holding ${amount} for ${who(e.actor)}`],
+        Cancel: ["d", `Closed ${name}`],
+      }[e.action];
+      if (!line) continue;
+      items.push({
+        key: `${v.address}-${e.index}`,
+        timestamp: e.timestamp,
+        index: e.index,
+        kind: line[0],
+        message: line[1],
+        ago: formatAgo(e.timestamp, now),
+      });
     }
   }
-  // Newest first; within one block, later entries first (so "Beneficiary
-  // added" sits above the "Vault created" it was recorded with).
+  // Within one block, later entries first.
   return items.sort((a, b) => b.timestamp - a.timestamp || b.index - a.index);
-}
-
-// Does any open vault need the owner's attention (overdue or due)?
-export function needsAttention(vaults, now) {
-  return vaults.some((v) => {
-    const state = liveState(v, now);
-    return state === "Due" || (state === "Active" && now > v.lastCheckIn + v.interval);
-  });
-}
-
-export function dashboardProps(vaults, now) {
-  const change = thirtyDayChange(vaults, now);
-  return {
-    totalValue: formatUsd(vaults.reduce((sum, v) => sum + v.balanceRaw, 0n)),
-    changeText: change.text,
-    changeUp: change.up,
-    activeCount: String(vaults.filter((v) => liveState(v, now) === "Active").length),
-    vaults: sortVaults(vaults, now).slice(0, 2).map((v) => vaultCard(v, now)),
-    activity: activityItems(vaults).slice(0, 3),
-  };
 }

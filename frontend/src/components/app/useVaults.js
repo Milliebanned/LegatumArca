@@ -69,12 +69,41 @@ export function useOwnerVaults() {
   return { vaults, error, reload };
 }
 
-// Seconds since the epoch, ticking once a second, for live countdowns.
+// The chain's clock in seconds, ticking once a second, for live countdowns.
+// Deadlines are judged by block time, so this device's clock is only used to
+// count forward from the newest block seen: a wrong clock or time zone can't
+// make a deadline look further away than it is.
 export function useNow() {
+  const { provider } = useWeb3();
+  const [offset, setOffset] = useState(-Infinity);
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
+
+  useEffect(() => {
+    if (!provider) return undefined;
+    let cancelled = false;
+    const sync = async () => {
+      try {
+        const block = await provider.getBlock("latest");
+        // Chain time never runs backwards, and an old block can only
+        // understate it, so the furthest-ahead reading is the best one.
+        if (!cancelled) setOffset((prev) => Math.max(prev, block.timestamp - Math.floor(Date.now() / 1000)));
+      } catch {
+        // Keep the last reading; the device clock carries on from it.
+      }
+    };
+    setOffset(-Infinity);
+    sync();
+    const id = setInterval(sync, 60000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [provider]);
+
   useEffect(() => {
     const id = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1000);
     return () => clearInterval(id);
   }, []);
-  return now;
+
+  return now + (Number.isFinite(offset) ? offset : 0);
 }

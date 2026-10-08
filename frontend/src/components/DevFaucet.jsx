@@ -26,10 +26,10 @@ export default function DevFaucet() {
   }
 
   return (
-    <div className="card dev-faucet">
-      <p className="muted">Local dev only — not part of the Arc mainnet build.</p>
-      <button onClick={mint} disabled={busy}>
-        {busy ? "Minting..." : "Mint 1,000 test USDC"}
+    <div className="kv">
+      <span className="hint">Local dev only</span>
+      <button type="button" className="btn" onClick={mint} disabled={busy}>
+        {busy ? "Minting…" : "Mint 1,000 test USDC"}
       </button>
     </div>
   );

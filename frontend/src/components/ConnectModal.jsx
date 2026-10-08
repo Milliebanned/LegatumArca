@@ -4,23 +4,14 @@ import { useEip6963Providers } from "../eip6963.js";
 import { ARC_CONFIG, IS_LOCAL_DEV } from "../config.js";
 import "../ConnectModal.css";
 
-function HexMark({ size = 28 }) {
+function Mark() {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" style={{ color: "#ED2B47" }}>
-      <polygon
-        points="12,2.5 20.5,7.25 20.5,16.75 12,21.5 3.5,16.75 3.5,7.25"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M12 2.5 L12 12 L20.5 7.25 M12 12 L3.5 7.25 M12 12 L12 21.5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        strokeLinejoin="round"
-      />
+    <svg viewBox="0 0 64 64" aria-hidden="true">
+      <g fill="none" stroke="currentColor" strokeWidth="7" strokeLinecap="round">
+        <path d="M28 10A18 18 0 0 0 28 46" />
+        <path d="M36 54A18 18 0 0 0 36 18" />
+      </g>
+      <circle cx="32" cy="32" r="4.5" fill="currentColor" />
     </svg>
   );
 }
@@ -60,10 +51,10 @@ export default function ConnectModal({ onClose }) {
   let blurb = `Choose a wallet to open your vault on ${ARC_CONFIG.label}.`;
   if (needsNetwork) {
     title = "Wrong network";
-    blurb = `Legatumarca runs on ${ARC_CONFIG.label} (chain ${ARC_CONFIG.chainId}). Your wallet is on chain ${chainId}.`;
+    blurb = `Legatum Arca runs on ${ARC_CONFIG.label} (chain ${ARC_CONFIG.chainId}). Your wallet is on chain ${chainId}.`;
   } else if (wrongNode) {
     title = "Contracts not found";
-    blurb = `Your wallet is on chain ${ARC_CONFIG.chainId}, but no Legatumarca factory exists at the configured address.`;
+    blurb = `Your wallet is on chain ${ARC_CONFIG.chainId}, but no Legatum Arca factory exists at the configured address.`;
   }
 
   return (
@@ -76,11 +67,8 @@ export default function ConnectModal({ onClose }) {
         </button>
 
         <div className="cm-brand">
-          <HexMark />
-          <span className="cm-wordmark">
-            <span className="cm-wordmark-light">LEGATUM</span>
-            <span className="cm-wordmark-accent">ARCA</span>
-          </span>
+          <Mark />
+          Legatum Arca
         </div>
 
         <h2 className="cm-title" id="cm-title">
@@ -147,7 +135,7 @@ export default function ConnectModal({ onClose }) {
         {error && <p className="cm-error">{error}</p>}
 
         <p className="cm-footnote">
-          Non-custodial. Legatumarca never holds your keys and has no admin backdoor.
+          Non-custodial. Legatum Arca never holds your keys and has no admin backdoor.
         </p>
       </div>
     </div>
