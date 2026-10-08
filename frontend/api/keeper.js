@@ -22,7 +22,7 @@ export const config = { maxDuration: 60 };
 // Vaults a pass comfortably gets through; the next day's pass starts this far on.
 const SCAN_STRIDE = 2000;
 // Below this many USDC the keeper wallet needs topping up.
-const LOW_BALANCE = 0.5;
+const LOW_BALANCE = 0.1;
 
 export default async function handler(req, res) {
   const secret = process.env.CRON_SECRET;
