@@ -11,15 +11,23 @@ const fs = require("fs");
 const path = require("path");
 const { ethers, network, run } = require("hardhat");
 
-// Publishes a contract's source on the block explorer. A failure here doesn't
-// undo the deployment, so it's reported with the command to retry by hand.
+// Publishes a contract's source on the block explorer. The explorer rate-limits
+// (HTTP 429), so each attempt waits first and a refusal is retried. A failure
+// here doesn't undo the deployment, so it's reported with the command to
+// retry by hand.
 async function verify(address, constructorArguments) {
-  try {
-    await run("verify:verify", { address, constructorArguments });
-  } catch (err) {
-    if (/already verified/i.test(err.message)) return;
-    console.error(`Could not verify ${address}: ${err.message}`);
-    console.error(`Retry with: npx hardhat verify --network arc ${address} ${constructorArguments.join(" ")}`);
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 30000));
+    try {
+      await run("verify:verify", { address, constructorArguments });
+      return;
+    } catch (err) {
+      if (/already verified/i.test(err.message)) return;
+      if (attempt < 4 && /429|too many requests/i.test(err.message)) continue;
+      console.error(`Could not verify ${address}: ${err.message}`);
+      console.error(`Retry with: npx hardhat verify --network arc ${address} ${constructorArguments.join(" ")}`);
+      return;
+    }
   }
 }
 
