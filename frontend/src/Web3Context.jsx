@@ -26,6 +26,9 @@ export function Web3Provider({ children }) {
   // React state since it's only used imperatively, for attaching/removing
   // its event listeners.
   const rawProviderRef = useRef(null);
+  // True while a switch/add-network request is open in the wallet, so a
+  // second one isn't stacked on top of it.
+  const switchingRef = useRef(false);
 
   const wrongChain = chainId !== null && chainId !== ARC_CONFIG.chainId;
 
@@ -55,6 +58,45 @@ export function Web3Provider({ children }) {
     raw.removeListener?.("accountsChanged", raw.__onAccountsChanged);
     raw.removeListener?.("chainChanged", raw.__onChainChanged);
   }, []);
+
+  // Asks the wallet to switch to the configured chain, adding it (EIP-3085)
+  // if the wallet doesn't know it yet — most wallets besides MetaMask won't
+  // have Arc pre-configured. The chain parameters come from ARC_CONFIG so a
+  // local build points the wallet at the local node, never at mainnet.
+  const switchChain = useCallback(async (raw) => {
+    if (!raw || switchingRef.current) return;
+    switchingRef.current = true;
+    const hexChainId = "0x" + ARC_CONFIG.chainId.toString(16);
+    try {
+      await raw.request({ method: "wallet_switchEthereumChain", params: [{ chainId: hexChainId }] });
+    } catch (switchErr) {
+      // 4902: the wallet has no such chain configured yet, so add it.
+      if (switchErr?.code !== 4902) {
+        setError(switchErr?.code === 4001 ? `Switch your wallet to ${ARC_CONFIG.label} to continue.` : (switchErr?.message ?? "Failed to switch network"));
+        return;
+      }
+      const params = {
+        chainId: hexChainId,
+        chainName: ARC_CONFIG.label,
+        nativeCurrency: ARC_CONFIG.nativeCurrency,
+        rpcUrls: [ARC_CONFIG.rpcUrl],
+      };
+      if (ARC_CONFIG.blockExplorerUrl) {
+        params.blockExplorerUrls = [ARC_CONFIG.blockExplorerUrl];
+      }
+      try {
+        await raw.request({ method: "wallet_addEthereumChain", params: [params] });
+      } catch (addErr) {
+        setError(addErr?.code === 4001 ? `Add ${ARC_CONFIG.label} to your wallet to continue.` : (addErr?.message ?? "Failed to add network"));
+      }
+    } finally {
+      switchingRef.current = false;
+    }
+  }, []);
+
+  // The button in the wrong-network dialog, for a wallet that declined the
+  // automatic request.
+  const addArcNetwork = useCallback(() => switchChain(rawProviderRef.current), [switchChain]);
 
   // `rawEip1193Provider` is a specific wallet's own provider object, as
   // handed to us by EIP-6963 (see eip6963.js), or window.ethereum as a
@@ -94,46 +136,17 @@ export function Web3Provider({ children }) {
           verifyContracts(browserProvider);
         } else {
           setContractsMissing(false);
+          // On any other network, ask the wallet straight away to move to (or
+          // add) the right one. Approving it fires chainChanged, which runs
+          // connect again on the new chain.
+          switchChain(raw);
         }
       } catch (err) {
         setError(err?.message ?? "Failed to connect wallet");
       }
     },
-    [refreshBalance, detachRawListeners, verifyContracts]
+    [refreshBalance, detachRawListeners, verifyContracts, switchChain]
   );
-
-  // Asks the wallet to switch to the configured chain, adding it (EIP-3085)
-  // if the wallet doesn't know it yet — most wallets besides MetaMask won't
-  // have Arc pre-configured. The chain parameters come from ARC_CONFIG so a
-  // local build points the wallet at the local node, never at mainnet.
-  const addArcNetwork = useCallback(async () => {
-    const raw = rawProviderRef.current;
-    if (!raw) return;
-    const hexChainId = "0x" + ARC_CONFIG.chainId.toString(16);
-    try {
-      await raw.request({ method: "wallet_switchEthereumChain", params: [{ chainId: hexChainId }] });
-    } catch (switchErr) {
-      // 4902: the wallet has no such chain configured yet, so add it.
-      if (switchErr?.code !== 4902) {
-        setError(switchErr?.message ?? "Failed to switch network");
-        return;
-      }
-      const params = {
-        chainId: hexChainId,
-        chainName: ARC_CONFIG.label,
-        nativeCurrency: ARC_CONFIG.nativeCurrency,
-        rpcUrls: [ARC_CONFIG.rpcUrl],
-      };
-      if (ARC_CONFIG.blockExplorerUrl) {
-        params.blockExplorerUrls = [ARC_CONFIG.blockExplorerUrl];
-      }
-      try {
-        await raw.request({ method: "wallet_addEthereumChain", params: [params] });
-      } catch (addErr) {
-        setError(addErr?.message ?? "Failed to add network");
-      }
-    }
-  }, []);
 
   // Forget the session on this page. Wallets have no standard "disconnect"
   // request, so the extension itself keeps its site permission.
