@@ -9,27 +9,8 @@
 //   npx hardhat run script/deploy.js --network arc
 const fs = require("fs");
 const path = require("path");
-const { ethers, network, run } = require("hardhat");
-
-// Publishes a contract's source on the block explorer. The explorer rate-limits
-// (HTTP 429), so each attempt waits first and a refusal is retried. A failure
-// here doesn't undo the deployment, so it's reported with the command to
-// retry by hand.
-async function verify(address, constructorArguments) {
-  for (let attempt = 1; attempt <= 4; attempt++) {
-    await new Promise((resolve) => setTimeout(resolve, 30000));
-    try {
-      await run("verify:verify", { address, constructorArguments });
-      return;
-    } catch (err) {
-      if (/already verified/i.test(err.message)) return;
-      if (attempt < 4 && /429|too many requests/i.test(err.message)) continue;
-      console.error(`Could not verify ${address}: ${err.message}`);
-      console.error(`Retry with: npx hardhat verify --network arc ${address} ${constructorArguments.join(" ")}`);
-      return;
-    }
-  }
-}
+const { execFileSync } = require("child_process");
+const { ethers, network } = require("hardhat");
 
 async function main() {
   if (network.name !== "arc") {
@@ -78,10 +59,15 @@ export default {
   );
   console.log("Wrote frontend/src/deployedMainnet.js");
 
-  // Both take the USDC address as their only constructor argument. Every
-  // vault is a clone of the implementation, so verifying it covers them all.
-  await verify(factoryAddress, [usdcAddress]);
-  await verify(implAddress, [usdcAddress]);
+  // Publish both sources (every vault is a clone of the implementation, so
+  // verifying it covers them all). A failure here doesn't undo the
+  // deployment; the command can simply be run again.
+  const verifyArgs = ["script/verify-sourcify.js", "5042", factoryAddress, "VaultFactory", implAddress, "Vault"];
+  try {
+    execFileSync("node", verifyArgs, { stdio: "inherit", cwd: path.join(__dirname, "..") });
+  } catch {
+    console.error(`Verification failed. Retry with: node ${verifyArgs.join(" ")}`);
+  }
 }
 
 main().catch((error) => {

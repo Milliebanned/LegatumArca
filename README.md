@@ -21,11 +21,14 @@ You can have any number of vaults, each with its own people, shares and timer, a
 | | |
 |---|---|
 | Network | Arc mainnet (chain ID 5042) |
-| VaultFactory | _to be filled in after the mainnet deployment_ |
+| App | https://frontend-eta-teal-52.vercel.app |
+| VaultFactory | [`0x178909656B745aB483eD5585df4cEe68Dd715871`](https://explorer.arc.io/address/0x178909656B745aB483eD5585df4cEe68Dd715871) |
+| Vault implementation | [`0x02f23A8bC9E606709572aa6eE46Fd30bc8886d3e`](https://explorer.arc.io/address/0x02f23A8bC9E606709572aa6eE46Fd30bc8886d3e) |
 | USDC | `0x3600000000000000000000000000000000000000` |
-| App | _to be filled in_ |
 
-A staging build runs against Arc testnet at https://frontend-eta-teal-52.vercel.app. Its factory is [`0xEc4d67B9e5C7D68AC21E12f81796aD9d072Dd720`](https://explorer.testnet.arc.io/address/0xEc4d67B9e5C7D68AC21E12f81796aD9d072Dd720#code), verified on the explorer.
+Both contracts are source-verified on Sourcify ([factory](https://repo.sourcify.dev/5042/0x178909656B745aB483eD5585df4cEe68Dd715871), [vault](https://repo.sourcify.dev/5042/0x02f23A8bC9E606709572aa6eE46Fd30bc8886d3e)). Every vault is a minimal-proxy clone of the vault implementation.
+
+The same code was first run on Arc testnet, where the factory is [`0xEc4d67B9e5C7D68AC21E12f81796aD9d072Dd720`](https://explorer.testnet.arc.io/address/0xEc4d67B9e5C7D68AC21E12f81796aD9d072Dd720#code). A vault there with a one-day window was paid out by the hosted keeper with no action from its owner or beneficiaries.
 
 ## Contracts
 
@@ -80,7 +83,7 @@ Copy `.env.example` to `.env` and fill it in, then:
 npm run deploy:arc
 ```
 
-The script refuses any network but Arc mainnet, writes the factory address to `frontend/src/deployedMainnet.js`, and verifies both contracts on the explorer.
+The script refuses any network but Arc mainnet, writes the factory address to `frontend/src/deployedMainnet.js`, and publishes both contracts' source through Sourcify (`script/verify-sourcify.js`).
 
 ### Keeper
 

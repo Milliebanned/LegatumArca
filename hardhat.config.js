@@ -12,6 +12,8 @@ module.exports = {
   // Source verification on Arc's block explorer (Blockscout), so anyone can
   // read the contracts and an owner can check in from the explorer if the app
   // is ever unreachable. Blockscout needs no API key; the plugin wants one set.
+  // This works on testnet. The mainnet explorer keeps its API behind a browser
+  // check, so mainnet goes through Sourcify (script/verify-sourcify.js).
   etherscan: {
     apiKey: { arc: "blockscout", arcTestnet: "blockscout" },
     customChains: [
@@ -27,6 +29,8 @@ module.exports = {
       },
     ],
   },
+  // The plugin's Sourcify client still calls an API Sourcify has removed.
+  // Mainnet sources are published with script/verify-sourcify.js instead.
   sourcify: { enabled: false },
   networks: {
     // Local network mirrors Arc mainnet's chain ID (5042) so the on-chain
