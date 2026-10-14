@@ -21,7 +21,7 @@ You can have any number of vaults, each with its own people, shares and timer, a
 | | |
 |---|---|
 | Network | Arc mainnet (chain ID 5042) |
-| App | https://frontend-eta-teal-52.vercel.app |
+| App | https://legatumarca.milliebanned.xyz |
 | VaultFactory | [`0x178909656B745aB483eD5585df4cEe68Dd715871`](https://explorer.arc.io/address/0x178909656B745aB483eD5585df4cEe68Dd715871) |
 | Vault implementation | [`0x02f23A8bC9E606709572aa6eE46Fd30bc8886d3e`](https://explorer.arc.io/address/0x02f23A8bC9E606709572aa6eE46Fd30bc8886d3e) |
 | USDC | `0x3600000000000000000000000000000000000000` |
